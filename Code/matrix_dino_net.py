@@ -110,7 +110,7 @@ class RecurrentSpikingNeuralNetwork:
 
         self.spikes = np.zeros((num_neurons))
 
-    def forward(self, inputs):
+    def forward(self, inputs):        
         assert len(inputs) == len(self.input_matrix[0]), 'The network was passed an unexpected number of inputs. Check the initialization of the network or the shape of the input.'
 
         # Every time step:
@@ -122,26 +122,16 @@ class RecurrentSpikingNeuralNetwork:
             self.spikes[i] = spike
 
         # All inputs are sent to their proper neuron, multiplied by their proper weight
-        # Could do this but it's slow: TODO: Find a faster way to do this (Currently n^2 time)
-        for i in range(len(self.input_matrix)):
-            for j in range(len(self.input_matrix[i])):
-                self.neurons[i].receive_input(inputs[j] * self.input_matrix[i, j])
-
-        # for i, input in enumerate(inputs):
-        #     self.neurons[int(self.input_map[i])].receive_input(input * self.input_weights[i])
+        in_vec = np.array(inputs).reshape(-1,1) # Turn inputs into a vertical vector
+        in_weighted = (self.input_matrix @ in_vec).reshape(-1) # Calculate and make it a 1d array for ease of looping
+        for i, input in enumerate(in_weighted):
+            self.neurons[i].receive_input(input)
 
         # All connections are resolved
-        # Could do this but it's slow: TODO: Find a faster way to do this (Currently n^2 time)
-        for i in range(len(self.connection_matrix)):
-            for j in range(len(self.connection_matrix[i])):
-                self.neurons[i].receive_input(self.spikes[j] * self.connection_matrix[i, j])
-
-
-        # for i, combo in enumerate(self.connections):
-        #     first_neuron = combo[0]
-        #     second_neuron = combo[1]
-        #     weight = self.connection_weights[i]
-        #     self.neurons[second_neuron].receive_input(self.spikes[first_neuron] * weight)
+        con_vec = self.spikes.reshape(-1,1) # Turn inputs into a vertical vector
+        con_weighted = (self.connection_matrix @ con_vec).reshape(-1) # Calculate and make it a 1d array for ease of looping
+        for i, val in enumerate(con_weighted):
+            self.neurons[i].receive_input(val)
 
         # What value to return?
         return self.spikes
@@ -154,7 +144,7 @@ class RecurrentSpikingNeuralNetwork:
                     self.input_matrix[i, j] += np.random.normal() * 0.1
                 else:
                     # Allow creation of new input connections!
-                    if np.random.random() >= 0.99:
+                    if np.random.random() >= 0.995:
                         self.input_matrix[i, j] += np.random.normal() * 0.1
         
         for i in range(self.connection_matrix.shape[0]):
@@ -163,16 +153,8 @@ class RecurrentSpikingNeuralNetwork:
                     self.connection_matrix[i, j] += np.random.normal() * 0.1
                 else:
                     # Allow creation of new connections!
-                    if np.random.random() >= 0.99:
+                    if np.random.random() >= 0.995:
                         self.connection_matrix[i, j] += np.random.normal() * 0.1
-
-        # for i in range(self.input_weights.shape[0]):
-        #     if random.random() < mutation_rate:
-        #         self.input_weights[i] += np.random.normal() * 0.1
-
-        # for i in range(len(self.connection_weights)):
-        #     if random.random() < mutation_rate:
-        #         self.connection_weights[i] += np.random.normal() * 0.1
 
     def visualize(self, screen):
         # Need to visualize inputs
@@ -184,8 +166,8 @@ class RecurrentSpikingNeuralNetwork:
         num_neurons = len(self.neurons)
         if num_neurons % 2 == 0:
             for i in range(num_neurons//2):
-                pygame.draw.circle(screen, BLACK, (720 - (50*i), 50), 15, width=self.spikes[2*i])
-                pygame.draw.circle(screen, BLACK, (720 - (50*i), 100), 15, width=self.spikes[2*i + 1])
+                pygame.draw.circle(screen, BLACK, (720 - (50*i), 50), 15, width=int(self.spikes[2*i]))
+                pygame.draw.circle(screen, BLACK, (720 - (50*i), 100), 15, width=int(self.spikes[2*i + 1]))
         
         # TODO: Visualize off number of neurons
 
@@ -194,27 +176,19 @@ class RecurrentSpikingNeuralNetwork:
         # pygame.draw.circle(screen, (255, 0, 0), (670, 150), 15, width=obs)
 
     def save(self, filename):
-        # TODO: BROKEN
-
         if not filename.endswith('.csv'):
             filename = filename + '.csv'
         
         data = [[''],]
 
-        for i in range(len(self.neurons) + 1):
+        for i in range(len(self.neurons)):
             # Set up connection format
             data[0].append(str(chr(65 + i)))
-            data.append([chr(65 + i), *list(0 for _ in range(len(self.neurons) + 1))])
+            data.append([chr(65 + i), *list(0 for _ in range(len(self.neurons)))])
 
 
         data = np.array(data)
-        # Insert weights according to connections
-        for i, (x, y) in enumerate(self.connections):
-            # Correct for labels
-            x += 1
-            y += 1
-            data[x, y] = self.connection_weights[i]
-
+        data[1:, 1:] = self.connection_matrix
 
         np.savetxt(filename, data, fmt='%s', delimiter=';')
 
