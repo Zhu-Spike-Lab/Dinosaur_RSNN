@@ -4,6 +4,7 @@ Files for the Google Dinosaur Game-inspired temporal task
 Python: 3.12.5
 Required libraries: numpy, pygame
 
+Note: This line was added via the Pomona HPC CLI
 ## Task Explanation
 The Google Dinosaur Game offers an incredibly simple temporal task. The only requisite output is either a 1 or a 0: jump or don't jump. The only metric for success is the timing of the jump. Jump at the right time, and the score increases. Jump at the wrong time and the game ends. In other words, the only calculation being done by the model is a calculation of timing, and score is a direct measurement of a model's temporal calculation competency. As an added bonus, this task is incredibly simple (and satisfying) to visualize and understand.
 
