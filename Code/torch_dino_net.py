@@ -6,7 +6,7 @@
 # DONE: Just change evaluate model to use the proper game function... :)
 
 import numpy as np
-import pygame
+# import pygame
 import time
 import Ivyer as ea
 import torch
@@ -40,13 +40,13 @@ class DinosaurGame():
         self.running = True
         self.jumping = False
         self.score = 0
-        self.font = pygame.font.Font(None, 36)
+        # self.font = pygame.font.Font(None, 36)
 
         # Calc'd constants
         self.cross_time = self.WIDTH / self.obstacle_speed
 
         # Game loop
-        self.clock = pygame.time.Clock()
+        # self.clock = pygame.time.Clock()
 
         if maximum:
             self.maximum = maximum
@@ -98,11 +98,12 @@ class DinosaurGame():
             # if self.score % 10 == 0:
             #     self.obstacle_speed += 1
 
-        # Collision detection
-        dino_rect = pygame.Rect(self.dino_x, self.dino_y, self.dino_size, self.dino_size)
-        obstacle_rect = pygame.Rect(self.obstacle_x, self.obstacle_y, self.obstacle_width, self.obstacle_height)
-        if dino_rect.colliderect(obstacle_rect):
-            self.alive = False
+        # # Collision detection
+        # dino_rect = pygame.Rect(self.dino_x, self.dino_y, self.dino_size, self.dino_size)
+        # obstacle_rect = pygame.Rect(self.obstacle_x, self.obstacle_y, self.obstacle_width, self.obstacle_height)
+        # if dino_rect.colliderect(obstacle_rect):
+        #     self.alive = False
+        self.alive = (self.dino_x + self.dino_size <= self.obstacle_x or self.obstacle_x + self.obstacle_width <= self.dino_x or self.dino_y + self.dino_size <= self.obstacle_y or self.obstacle_y + self.obstacle_height <= self.dino_y)
 
         if self.maximum:
             if self.score >= self.maximum:
@@ -141,7 +142,7 @@ def main():
 
     torch.set_default_device(device)
 
-    pygame.init()
+    # pygame.init()
 
     # Define the parameters for the evolutionary process
     pop_size = 10
