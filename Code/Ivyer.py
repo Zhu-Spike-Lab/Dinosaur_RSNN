@@ -1,5 +1,7 @@
 # Sine Wave Evolution Engine
 
+# Changes: added np.flip to the select function to sort greatest to least fitness
+
 import os
 import torch
 import snntorch as snn
@@ -25,29 +27,29 @@ import seaborn as sns
 import pygame
 import time
 
-### Sine Wave Dataset
-# Sine Wave Task Version: Explicit Time Resetting with period 
-class SineWaveDatasetLocal(Dataset):
-    def __init__(self, csv_file):
-        self.data = pd.read_csv(csv_file)
-        self.num_timesteps = 100 # length of sine wave sequence
+# ### Sine Wave Dataset
+# # Sine Wave Task Version: Explicit Time Resetting with period 
+# class SineWaveDatasetLocal(Dataset):
+#     def __init__(self, csv_file):
+#         self.data = pd.read_csv(csv_file)
+#         self.num_timesteps = 100 # length of sine wave sequence
 
-    def __len__(self):
-        return len(self.data)
+#     def __len__(self):
+#         return len(self.data)
 
-    def __getitem__(self, idx):
-        amplitude = self.data.iloc[idx, 0]
-        sine_wave = eval(self.data.iloc[idx, 1])  
+#     def __getitem__(self, idx):
+#         amplitude = self.data.iloc[idx, 0]
+#         sine_wave = eval(self.data.iloc[idx, 1])  
         
-        # L1: Explicit Time Resetting with period 
-        amplitude_vector = torch.tensor([amplitude] * self.num_timesteps, dtype=torch.float32)
-        time_vector = torch.tensor([i for i in range(40)] * (self.num_timesteps//int(40)+1), dtype=torch.float32)
-        time_vector = time_vector[:self.num_timesteps]
-        sine_wave_vector = torch.tensor(sine_wave, dtype=torch.float32)
+#         # L1: Explicit Time Resetting with period 
+#         amplitude_vector = torch.tensor([amplitude] * self.num_timesteps, dtype=torch.float32)
+#         time_vector = torch.tensor([i for i in range(40)] * (self.num_timesteps//int(40)+1), dtype=torch.float32)
+#         time_vector = time_vector[:self.num_timesteps]
+#         sine_wave_vector = torch.tensor(sine_wave, dtype=torch.float32)
         
-        input_vector = torch.stack([amplitude_vector,time_vector],dim=1)  # Shape: [num_timesteps, 2]
-        target_vector = torch.stack([sine_wave_vector],dim=1)
-        return input_vector, sine_wave_vector
+#         input_vector = torch.stack([amplitude_vector,time_vector],dim=1)  # Shape: [num_timesteps, 2]
+#         target_vector = torch.stack([sine_wave_vector],dim=1)
+#         return input_vector, sine_wave_vector
 
 
 ### Building Connectivity and Neurons
@@ -392,11 +394,11 @@ class RLIF1(LIF):
 
 # RSNN model with 1 input neurons, 200 hidden neurons, and 1 output neuron, with 3 inhibitory neuron classes
 class RSNN2(nn.Module):
-    def __init__(self):
+    def __init__(self, num_inputs, num_hidden, num_outputs):
         super(RSNN2, self).__init__()
-        num_inputs = 1
-        num_hidden = 200
-        num_output = 1
+        num_inputs = num_inputs
+        num_hidden = num_hidden
+        num_output = num_outputs
         pe_e = 0.16
 
         # Dictionary with probabilities of connection between each neuron type 
@@ -651,22 +653,22 @@ class Evolution(object):
                 outputs, spikes = model(inputs)
                 firing_rate = torch.sum(spikes) / torch.tensor(spikes.numel(), dtype=torch.float)
                 loss = criterion(firing_rate)
-                running_loss += loss.item()
+                running_loss -= loss.item()
 
                 choice = int((sum(outputs) >= 0.05))
                 # Punish jumps
-                running_loss += 0.2 * choice
+                # running_loss += 0.2 * choice
                 # print(f'Outs: {outputs}, sum: {sum(outputs)}')
                 game.step(choice)
             
             # Reward a good score...
-            running_loss -= game.score # Should be +=?
+            running_loss += game.score # Should be +=?
 
         return running_loss
 
     # select the top k models based on fitness
     def select(self, genes, fitness, k=2):
-        selected_indices = np.argsort(fitness)[:k]
+        selected_indices = np.flip(np.argsort(fitness))[:k]
         # print(f'Argsort: {np.argsort(fitness)} Selected: {selected_indices}')
         return [genes[i] for i in selected_indices], [fitness[i] for i in selected_indices]
 
@@ -722,7 +724,7 @@ class Evolution(object):
                 excitatory_zero_indices[1][torch.randint(len(excitatory_zero_indices[1]), (num_false_pos,))]
             ], dim=1)
 
-            new_excitatory_values = torch.from_numpy(np.random.lognormal(mean=mu, sigma=sigma, size=num_false_pos)).float()
+            new_excitatory_values = torch.from_numpy(np.random.lognormal(mean=mu, sigma=sigma, size=num_false_pos)).float().to(model.rlif1.recurrent.weight.data.device)
             model.rlif1.recurrent.weight.data[excitatory_sampled_indices[:, 0], excitatory_sampled_indices[:, 1]] = new_excitatory_values
 
         if len(inhibitory_zero_indices[0]) > num_false_neg:
@@ -731,7 +733,7 @@ class Evolution(object):
                 inhibitory_zero_indices[1][torch.randint(len(inhibitory_zero_indices[1]), (num_false_neg,))]
             ], dim=1)
 
-            new_inhibitory_values = -torch.from_numpy(np.random.lognormal(mean=mu, sigma=sigma, size=num_false_neg)).float()
+            new_inhibitory_values = -torch.from_numpy(np.random.lognormal(mean=mu, sigma=sigma, size=num_false_neg)).float().to(model.rlif1.recurrent.weight.data.device)
             model.rlif1.recurrent.weight.data[inhibitory_sampled_indices[:, 0], num_excitatory + inhibitory_sampled_indices[:, 1]] = new_inhibitory_values
 
 
@@ -796,7 +798,8 @@ class Evolution(object):
         all_best_fitness = []
         all_fitness = []
         best_gene_overall = None
-        best_fitness_overall = float('inf')
+        # best_fitness_overall = float('inf')
+        best_fitness_overall = 0
         
         # run the evolution process for n_generations
         for i in range(n_generations):
@@ -809,7 +812,7 @@ class Evolution(object):
             best_fitness = min(parent_fitness)
             all_best_fitness.append(best_fitness)
 
-            if best_fitness < best_fitness_overall:
+            if best_fitness > best_fitness_overall:
                 best_fitness_overall = best_fitness
                 best_gene_overall = deepcopy(parents[0])
                 
