@@ -146,7 +146,7 @@ def main():
 
     # Define the parameters for the evolutionary process
     pop_size = 10
-    num_generations = 2500
+    num_generations = 6
     n_offspring = 10
     # mutation_rate = 0.05
     mutation_rate = 0.5
@@ -158,7 +158,7 @@ def main():
     # done: change evolve, custom loss
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
-    ea.visualize_model(best_model, DinosaurGame, (100,))
+    # ea.visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
     torch.save(best_model.state_dict(), 'best_model.pth')

@@ -754,7 +754,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Best Fitness (Loss)')
         plt.title('Evolution of Best Fitness')
-        plt.show()
+        plt.savefig('Best_Fitness.png')
 
     # plot the fitness distribution across generations
     def plot_fitness_distribution(self, all_fitness):
@@ -776,7 +776,7 @@ class Evolution(object):
         plt.ylabel('Frequency')
         plt.title('Fitness Distribution Across Generations')
         plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1))
-        plt.show()
+        plt.savefig('Fitness_Distr.png')
 
     # plot the average fitness across generations
     def plot_average_fitness(self, all_fitness):
@@ -786,7 +786,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Average Fitness (Loss)')
         plt.title('Evolution of Average Fitness')
-        plt.show()
+        plt.savefig('Average_Fitness.png')
 
     # run the evolutionary process
     def evolve(self, n_models, n_offspring, n_generations, game_class, game_args, mutation_rate):
@@ -856,7 +856,7 @@ def plot_spike_tensor(spk_tensor, title):
     axs.set_ylabel('Neuron')
     axs.set_title(title)
 
-    plt.show()
+    plt.savefig('Spikes.png')
 
 
 
@@ -886,7 +886,7 @@ def plot_connectivity_changes_heat(initial_models, final_models):
     axs[2].set_title('Difference in Recurrent to Output Weights')
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('Weights.png')
 
 def get_layer_weights(models):
     layer_weights = {
@@ -950,7 +950,7 @@ def plot_connectivity_changes_line(initial_models, final_models):
     axs[2].legend()
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('Connectivity_Changes.png')
 
 # rasters for best model of evolution and sine wave predictions
 def print_model_performance(model, game_class, game_args):
