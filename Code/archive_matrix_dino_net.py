@@ -1,17 +1,5 @@
-# TODO: Break visualization into parts. Add neural net visualization for any # Neurons
+### DEPRECATED
 
-# TODO: Directions:
-# Visualize the connections and weights (also add saving of neural nets)
-# Start by saving most fit of all time, then maybe go to most fit of each generation. Save spiking activity as well?
-# Need to save the input weights as well
-# Penalize extra jumps
-# Change speed of obstacles and see if model can learn
-# See how number of neurons affects the training process (scaling laws)
-# Specifying that neurons that receive input cannot give output
-# Try combining output of multiple neurons to provide final output
-# Specifying neuron types
-# Vary frequency of obstacles (keep speed constant though) - to make sure model is truly responding to the input
-# Use other training models
 
 import numpy as np
 import pygame
@@ -198,11 +186,10 @@ class DinosaurGame:
 
     def get_input(self):
         # Return input: 1 if obstacle, 0 if not (obstacles appear every few timesteps)
-        # TODO: FIX bc 350/11 is not int
+        # TODO: Give position of obstacle just for funsies
         # Could give distance btw obstacle and character
         # Could give its own position & object's position
-        # return [1 if self.obstacle_x == 350 else 0]
-        return [1 if self.time % 45 == 0 else 0]
+        return [1 if self.obstacle_x == 350 else 0]
 
     def step(self, action):
         # Event handling
@@ -264,7 +251,7 @@ class DinosaurGame:
 
 # TODO: Need more methods of training
 class EvolutionaryAlgorithm:
-    def __init__(self, population_size=20, mutation_rate=0.1, num_neurons=17):
+    def __init__(self, population_size=20, mutation_rate=0.1, num_neurons=16):
         self.population_size = population_size
         self.mutation_rate = mutation_rate
         self.num_neurons = num_neurons
@@ -276,7 +263,7 @@ class EvolutionaryAlgorithm:
         while game.alive:
             inputs = game.get_input()
             outputs = network.forward(inputs)
-            total += np.sum(outputs)
+            total += outputs[0]
             game.step(outputs[0])
 
             # Visualize
@@ -290,7 +277,7 @@ class EvolutionaryAlgorithm:
 
         # if total > 1:
         #     print(total)
-        return game.score
+        return game.score # - 0.01 * total
 
     def run_generation(self, screen=None, maximum=False):
         # Evaluate fitness of each network

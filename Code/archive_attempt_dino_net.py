@@ -1,19 +1,4 @@
-# TODO: Break visualization into parts. Add neural net visualization for any # Neurons
-
-# TODO: Directions:
-# Visualize the connections and weights (also add saving of neural nets)
-# Start by saving most fit of all time, then maybe go to most fit of each generation. Save spiking activity as well?
-# Penalize extra jumps
-# Change speed of obstacles and see if model can learn
-# CHECK: Make sure weights can decrease
-# See how number of neurons affects the training process (scaling laws)
-# Specifying that neurons that receive input cannot give output
-# Try combining output of multiple neurons to provide final output
-# Specifying neuron types
-# Integrate with github
-# Clean up files
-# Vary frequency of obstacles (keep speed constant though) - to make sure model is truly responding to the input
-# Use other training models
+### DEPRECATED
 
 import numpy as np
 import pygame
@@ -67,7 +52,6 @@ class RecurrentSpikingNeuralNetwork:
             if np.random.random() >= 0.8:
                 # combo = list(combo)
                 # np.random.shuffle(combo)
-                # TODO: ^ Probably not necessary
                 self.connections.append(combo)
         
         # Check to make sure each neuron has a connection, otherwise connect it to i-1 (will work for 0 too, methinks)
@@ -134,7 +118,6 @@ class RecurrentSpikingNeuralNetwork:
                 pygame.draw.circle(screen, BLACK, (720 - (50*i), 50), 15, width=self.spikes[2*i])
                 pygame.draw.circle(screen, BLACK, (720 - (50*i), 100), 15, width=self.spikes[2*i + 1])
         
-        # TODO: Visualize off number of neurons
 
 
         # obs = 1 if self.obstacle_x == 250 else 0
