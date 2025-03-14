@@ -23,8 +23,8 @@ import random
 from copy import deepcopy
 import seaborn as sns
 
-# For game functions
-import pygame
+# # For game functions
+# import pygame
 import time
 
 # ### Sine Wave Dataset
