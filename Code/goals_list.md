@@ -2,10 +2,14 @@
 
 End goal: get a way to freeze the game, change the model in a custom way, then play the game step by step (like a debug feature)
 
-## TODO: How tf are we gonna feed Ivyer's models our data? Can't do a classic dataloader bc the problem is too open ended... we have to get the model's guess then tell it if it's right...
-
 ## Immediately:
-Ivyer's code move to gpu :)
+What we've found out: Ivyer's code can't run: line ~654 threshold output for spiking is way too low
+	More importantly, the forward of the network absolutely does not work... should be fixed now I think
+
+Add multiprocessing to Ivyer Code?
+Ask Ulas for code about multiple neuron types
+RL Learning :)
+---Ivyer's code move to gpu :)---
 Should use one-hot encoding? - yeah try it, but it's spiking so shouldn't really matter
 ---Need to change the way score is rewarded (give score when there's a good jump)---
 ---Need to remove references to pygame…---

@@ -446,28 +446,37 @@ class RSNN2(nn.Module):
         self.rlif1.recurrent.weight.data = hidden_mx.T
 
         #hidden to output layer
+        # For the purposes of our game, this is pretty much completely unnecessary and can be replaced w a single output neuron
         hid_out_mx = conn_mx(num_hidden,num_output,pe_e)
         self.l2 = nn.Linear(num_hidden, num_output)
         self.l2.weight.data = hid_out_mx.T 
 
+        self.spk1,self.mem1 = self.rlif1.init_rleaky()
+        self.spk1_rec = []
+        self.cur2_rec = []
+
     def forward(self, inputs):
-        spk1,mem1 = self.rlif1.init_rleaky()
+        ## WHAT SHOULD HAPPEN: Preserves state from previous forward to include as input (self.spk1, self.mem1)
+        ### Resets current output & spikes so we can see them at each time step
+
+
+        # spk1,mem1 = self.rlif1.init_rleaky()
         self.spk1_rec = []
         self.cur2_rec = []
 
         # print(inputs.shape)
-        for step in range(inputs.shape[0]): #300
+        for step in range(inputs.shape[0]):
             cur_input = inputs[step,:]
             cur1 = self.l1(cur_input)
-            spk1,mem1 = self.rlif1(cur1, spk1, mem1)
-            self.mem1 = mem1
-            cur2 = self.l2(spk1)
+            self.spk1,self.mem1 = self.rlif1(cur1, self.spk1, self.mem1)
+            # self.mem1 = self.mem1
+            # cur2 = self.l2(self.spk1)
 
-            self.spk1_rec.append(spk1)
-            self.cur2_rec.append(cur2)
+            self.spk1_rec.append(self.spk1)
+            # self.cur2_rec.append(cur2)
 
         self.spk1_rec = torch.stack(self.spk1_rec)
-        self.cur2_rec = torch.stack(self.cur2_rec)
+        # self.cur2_rec = torch.stack(self.cur2_rec)
         
         return self.cur2_rec, self.spk1_rec
 
@@ -523,9 +532,15 @@ class CustomLoss(nn.Module):
 
     def __init__(self, target_synchrony=1.4, target_firing_rate=0.02, target_branching=1.0,batch_size=25):
         super(CustomLoss, self).__init__()
-        self.target_synchrony = torch.tensor([target_synchrony] * batch_size, requires_grad=True)
-        self.target_firing_rate = torch.tensor([target_firing_rate] * batch_size,requires_grad=True)
-        self.target_branching = torch.tensor([target_branching] * batch_size,requires_grad=True)
+        if batch_size == 1:
+            self.target_synchrony = torch.tensor(target_synchrony, requires_grad=True)
+            self.target_firing_rate = torch.tensor(target_firing_rate,requires_grad=True)
+            self.target_branching = torch.tensor(target_branching,requires_grad=True)
+        else:
+            self.target_synchrony = torch.tensor([target_synchrony] * batch_size, requires_grad=True)
+            self.target_firing_rate = torch.tensor([target_firing_rate] * batch_size,requires_grad=True)
+            self.target_branching = torch.tensor([target_branching] * batch_size,requires_grad=True)
+
 
     def forward(self, firing_rate):
 
@@ -640,8 +655,9 @@ class Evolution(object):
         return fitness
 
     # evaluate a model with the dinosaur dataloader
+    # TODO: This can be multiprocessed
     def evaluate_model(self, model, game_class, game_args):
-        criterion = CustomLoss(target_firing_rate=0.02)
+        criterion = CustomLoss(target_firing_rate=0.02, batch_size=1)
         running_loss = 0
         game = game_class(*game_args)
 
@@ -655,7 +671,8 @@ class Evolution(object):
                 loss = criterion(firing_rate)
                 running_loss -= loss.item()
 
-                choice = int((sum(outputs) >= 0.05))
+                # choice = int((sum(outputs) >= 1)) # 0.05
+                choice = spikes[0,0]
                 # Punish jumps
                 # running_loss += 0.2 * choice
                 # print(f'Outs: {outputs}, sum: {sum(outputs)}')
