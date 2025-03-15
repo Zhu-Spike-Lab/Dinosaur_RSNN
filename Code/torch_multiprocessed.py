@@ -1223,7 +1223,7 @@ def main():
     visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
-    torch.save(best_model.state_dict(), 'best_model.pth')
+    torch.save(best_model.state_dict(), f'best_model {time.asctime()}.pth')
 
     # Usage example after evolution process
     initial_models = evolution.populate(pop_size)
