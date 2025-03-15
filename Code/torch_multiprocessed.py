@@ -788,7 +788,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Best Fitness (Loss)')
         plt.title('Evolution of Best Fitness')
-        plt.savefig('Best_Fitness.png')
+        plt.savefig(f'Best_Fitness {time.asctime()}.png')
 
     # plot the fitness distribution across generations
     def plot_fitness_distribution(self, all_fitness):
@@ -810,7 +810,7 @@ class Evolution(object):
         plt.ylabel('Frequency')
         plt.title('Fitness Distribution Across Generations')
         plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1))
-        plt.savefig('Fitness_Distr.png')
+        plt.savefig(f'Fitness_Distr {time.asctime()}.png')
 
     # plot the average fitness across generations
     def plot_average_fitness(self, all_fitness):
@@ -820,7 +820,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Average Fitness (Loss)')
         plt.title('Evolution of Average Fitness')
-        plt.savefig('Average_Fitness.png')
+        plt.savefig(f'Average_Fitness {time.asctime()}.png')
 
     # run the evolutionary process
     def evolve(self, n_models, n_offspring, n_generations, game_class, game_args, mutation_rate):
@@ -890,7 +890,7 @@ def plot_spike_tensor(spk_tensor, title):
     axs.set_ylabel('Neuron')
     axs.set_title(title)
 
-    plt.savefig('Spikes.png')
+    plt.savefig(f'Spikes {time.asctime()}.png')
 
 
 
@@ -920,7 +920,7 @@ def plot_connectivity_changes_heat(initial_models, final_models):
     axs[2].set_title('Difference in Recurrent to Output Weights')
     
     plt.tight_layout()
-    plt.savefig('Weights.png')
+    plt.savefig(f'Weights {time.asctime()}.png')
 
 def get_layer_weights(models):
     layer_weights = {
@@ -984,7 +984,7 @@ def plot_connectivity_changes_line(initial_models, final_models):
     axs[2].legend()
     
     plt.tight_layout()
-    plt.savefig('Connectivity_Changes.png')
+    plt.savefig(f'Connectivity_Changes {time.asctime()}.png')
 
 # rasters for best model of evolution and sine wave predictions
 def print_model_performance(model, game_class, game_args):
