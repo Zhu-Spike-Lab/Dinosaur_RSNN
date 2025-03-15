@@ -24,7 +24,7 @@ from copy import deepcopy
 import seaborn as sns
 
 # # For game functions
-# import pygame
+import pygame
 import time
 
 import multiprocess as mp
@@ -788,7 +788,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Best Fitness (Loss)')
         plt.title('Evolution of Best Fitness')
-        plt.savefig(f'Best_Fitness {time.asctime()}.png')
+        plt.savefig(f'Data/Best_Fitness {time.asctime()}.png')
 
     # plot the fitness distribution across generations
     def plot_fitness_distribution(self, all_fitness):
@@ -810,7 +810,7 @@ class Evolution(object):
         plt.ylabel('Frequency')
         plt.title('Fitness Distribution Across Generations')
         plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1))
-        plt.savefig(f'Fitness_Distr {time.asctime()}.png')
+        plt.savefig(f'Data/Fitness_Distr {time.asctime()}.png')
 
     # plot the average fitness across generations
     def plot_average_fitness(self, all_fitness):
@@ -820,7 +820,7 @@ class Evolution(object):
         plt.xlabel('Generation')
         plt.ylabel('Average Fitness (Loss)')
         plt.title('Evolution of Average Fitness')
-        plt.savefig(f'Average_Fitness {time.asctime()}.png')
+        plt.savefig(f'Data/Average_Fitness {time.asctime()}.png')
 
     # run the evolutionary process
     def evolve(self, n_models, n_offspring, n_generations, game_class, game_args, mutation_rate):
@@ -833,7 +833,7 @@ class Evolution(object):
         all_fitness = []
         best_gene_overall = None
         # best_fitness_overall = float('inf')
-        best_fitness_overall = 0
+        best_fitness_overall = float('-inf')
         
         # run the evolution process for n_generations
         for i in range(n_generations):
@@ -846,7 +846,7 @@ class Evolution(object):
             best_fitness = min(parent_fitness)
             all_best_fitness.append(best_fitness)
 
-            if best_fitness > best_fitness_overall:
+            if best_fitness >= best_fitness_overall:
                 best_fitness_overall = best_fitness
                 best_gene_overall = deepcopy(parents[0])
                 
@@ -890,7 +890,7 @@ def plot_spike_tensor(spk_tensor, title):
     axs.set_ylabel('Neuron')
     axs.set_title(title)
 
-    plt.savefig(f'Spikes {time.asctime()}.png')
+    plt.savefig(f'Data/Spikes {time.asctime()}.png')
 
 
 
@@ -920,7 +920,7 @@ def plot_connectivity_changes_heat(initial_models, final_models):
     axs[2].set_title('Difference in Recurrent to Output Weights')
     
     plt.tight_layout()
-    plt.savefig(f'Weights {time.asctime()}.png')
+    plt.savefig(f'Data/Weights {time.asctime()}.png')
 
 def get_layer_weights(models):
     layer_weights = {
@@ -984,7 +984,7 @@ def plot_connectivity_changes_line(initial_models, final_models):
     axs[2].legend()
     
     plt.tight_layout()
-    plt.savefig(f'Connectivity_Changes {time.asctime()}.png')
+    plt.savefig(f'Data/Connectivity_Changes {time.asctime()}.png')
 
 # rasters for best model of evolution and sine wave predictions
 def print_model_performance(model, game_class, game_args):
@@ -998,7 +998,7 @@ def print_model_performance(model, game_class, game_args):
                 inputs = torch.tensor([[game.get_input(),]], dtype=torch.float)
                 outputs, spikes = model(inputs)
 
-                choice = (sum(outputs) >= 0.05)
+                choice = spikes[0,0]
                 game.step(choice)
             
             # Print the score
@@ -1054,7 +1054,7 @@ def visualize_model(model, game_class, game_args):
             inputs = torch.tensor([[game.get_input(),]], dtype=torch.float)
             outputs, spikes = model(inputs)
 
-            choice = (sum(outputs) >= 0.05)
+            choice = spikes[0,0]
             game.step(choice)
 
             # Visualize
@@ -1062,7 +1062,10 @@ def visualize_model(model, game_class, game_args):
             game.visualize(screen)
             # Update display
             pygame.display.flip()
-            rest = time.time() - start
+
+
+            # 60 fps (time.time is in nanoseconds)
+            rest = (16670000 - (time.time() - start))/1000000000
             if rest > 0:
                 time.sleep(rest)
 
@@ -1097,13 +1100,12 @@ class DinosaurGame():
         self.running = True
         self.jumping = False
         self.score = 0
-        # self.font = pygame.font.Font(None, 36)
 
         # Calc'd constants
         self.cross_time = self.WIDTH / self.obstacle_speed
 
         # Game loop
-        # self.clock = pygame.time.Clock()
+        self.clock = pygame.time.Clock()
 
         if maximum:
             self.maximum = maximum
@@ -1184,7 +1186,7 @@ class DinosaurGame():
         pygame.draw.rect(screen, self.BLACK, obstacle_rect)
 
         # Draw score
-        score_text = self.font.render(f"Score: {self.score}", True, self.BLACK)
+        score_text = font.render(f"Score: {self.score}", True, self.BLACK)
         screen.blit(score_text, (10, 10))
 
 
@@ -1206,7 +1208,7 @@ def main():
 
     # Define the parameters for the evolutionary process
     pop_size = 10
-    num_generations = 600
+    num_generations = 5
     n_offspring = 10
     # mutation_rate = 0.05
     mutation_rate = 0.5
@@ -1218,7 +1220,7 @@ def main():
     # done: change evolve, custom loss
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
-    # ea.visualize_model(best_model, DinosaurGame, (100,))
+    visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
     torch.save(best_model.state_dict(), 'best_model.pth')
