@@ -677,7 +677,7 @@ class Evolution(object):
         with torch.no_grad():
             # Run the game. Running loss will have the score included in it, so the criterion function does not need to consider the game at all
             while game.alive:
-                inputs = torch.tensor([[game.get_input(),]], dtype=torch.float)
+                inputs = torch.tensor([[game.get_input(),]], dtype=torch.float).to(model.device)
                 outputs, spikes = model(inputs)
                 firing_rate = torch.sum(spikes) / torch.tensor(spikes.numel(), dtype=torch.float)
                 loss = criterion(firing_rate)
@@ -1202,6 +1202,10 @@ def main():
         "mps" if torch.backends.mps.is_available() else
         "cpu"
     )
+    
+    if device.type == "cuda" or device.type == "mps":
+        mp.set_start_method('spawn')
+        print('Set to spawn!')
 
     file_path = 'ooga.txt'
 
