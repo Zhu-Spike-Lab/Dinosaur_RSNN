@@ -589,8 +589,9 @@ def decode_model(model, gene):
 
 # Main Evolution Class
 class Evolution(object):
-    def __init__(self, model_class, model_args, model_kwargs):
+    def __init__(self, multi, model_class, model_args, model_kwargs):
         # Initialize the model class and its arguments
+        self.multi = multi
         self.model_class = model_class
         self.model_args = model_args
         self.model_kwargs = model_kwargs
@@ -645,21 +646,29 @@ class Evolution(object):
         return [decode_model(template_model, gene) for gene in genes]
 
     def evaluate(self, models, game_class, game_args):
-        fitness = [0 for _ in range(len(models))]
-        processes = []
-        q = mp.Queue()
-        for i, model in enumerate(models):
-            processes.append(mp.Process(target=self.queue_eval_model, args=(q, i, model, game_class, game_args)))
-            processes[i].start()
+        if self.multi:
+            fitness = [0 for _ in range(len(models))]
+            processes = []
+            q = mp.Queue()
+            for i, model in enumerate(models):
+                processes.append(mp.Process(target=self.queue_eval_model, args=(q, i, model, game_class, game_args)))
+                processes[i].start()
 
-        for i in range(len(models)):
-            id, loss = q.get()
-            fitness[id] = loss
+            for i in range(len(models)):
+                id, loss = q.get()
+                fitness[id] = loss
 
-        for p in processes:
-            p.join()
+            for p in processes:
+                p.join()
 
-        return fitness
+            return fitness
+        
+        else:
+            fitness = []
+            for model in models:
+                loss = self.evaluate_model(model, game_class, game_args).item()
+                fitness.append(loss)
+            return fitness
 
     # Multiprocess the evaluation of models
     def queue_eval_model(self, q, id, model, game_class, game_args):
@@ -677,7 +686,7 @@ class Evolution(object):
         with torch.no_grad():
             # Run the game. Running loss will have the score included in it, so the criterion function does not need to consider the game at all
             while game.alive:
-                inputs = torch.tensor([[game.get_input(),]], dtype=torch.float).to(model.device)
+                inputs = torch.tensor([[game.get_input(),]], dtype=torch.float)
                 outputs, spikes = model(inputs)
                 firing_rate = torch.sum(spikes) / torch.tensor(spikes.numel(), dtype=torch.float)
                 loss = criterion(firing_rate)
@@ -1203,9 +1212,9 @@ def main():
         "cpu"
     )
     
-    if device.type == "cuda" or device.type == "mps":
-        mp.set_start_method('spawn')
-        print('Set to spawn!')
+    # if device.type == "cuda" or device.type == "mps":
+    #     mp.set_start_method('spawn')
+    #     print('Set to spawn!')
 
     file_path = 'ooga.txt'
 
@@ -1225,7 +1234,7 @@ def main():
 
     # Create the Evolution object and run the evolution process
     # 
-    evolution = Evolution(RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
+    evolution = Evolution(False, RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
     # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
     # done: change evolve, custom loss
     # game_args: maximum=100
