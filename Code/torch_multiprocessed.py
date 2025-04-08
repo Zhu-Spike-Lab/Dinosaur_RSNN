@@ -11,15 +11,11 @@ from snntorch import spikegen
 from snntorch import functional
 from snntorch import LIF
 from snntorch import spikeplot as splt
-
 from matplotlib import pyplot as plt
-
 import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
-
 import random
-
 from copy import deepcopy
 import seaborn as sns
 
@@ -648,7 +644,6 @@ class Evolution(object):
     def decode_population(self, genes, template_model):
         return [decode_model(template_model, gene) for gene in genes]
 
-    ### TODO: TEST OF MULTIPROCESSING
     def evaluate(self, models, game_class, game_args):
         fitness = [0 for _ in range(len(models))]
         processes = []
@@ -666,13 +661,13 @@ class Evolution(object):
 
         return fitness
 
+    # Multiprocess the evaluation of models
     def queue_eval_model(self, q, id, model, game_class, game_args):
         loss = self.evaluate_model(model, game_class, game_args)
         q.put((id, loss))
         return
 
     # evaluate a model with the dinosaur dataloader
-    # TODO: This can be multiprocessed
     def evaluate_model(self, model, game_class, game_args):
         criterion = CustomLoss(target_firing_rate=0.02, batch_size=1)
         running_loss = 0
@@ -691,7 +686,7 @@ class Evolution(object):
                 # choice = int((sum(outputs) >= 1)) # 0.05
                 choice = spikes[0,0]
                 # Punish jumps
-                # running_loss += 0.2 * choice
+                running_loss -= 0.2 * choice
                 # print(f'Outs: {outputs}, sum: {sum(outputs)}')
                 game.step(choice)
             
@@ -845,6 +840,14 @@ class Evolution(object):
             genes = parents + offspring
             best_fitness = min(parent_fitness)
             all_best_fitness.append(best_fitness)
+
+
+            # if best_fitness <= 95 and best_fitness_overall <= 50:
+            #     ### Visualization for Papa
+            #     best_gene_overall = deepcopy(parents[0])
+            #     best_model = self.decode_population([best_gene_overall], template_model)[0]
+            #     visualize_model(best_model, DinosaurGame, (100,))
+
 
             if best_fitness >= best_fitness_overall:
                 best_fitness_overall = best_fitness
@@ -1065,6 +1068,7 @@ def visualize_model(model, game_class, game_args):
 
 
             # 60 fps (time.time is in nanoseconds)
+            # rest = (16670000 - (time.time() - start))/1000000000
             rest = (16670000 - (time.time() - start))/1000000000
             if rest > 0:
                 time.sleep(rest)
@@ -1199,17 +1203,19 @@ def main():
         "cpu"
     )
 
+    file_path = 'ooga.txt'
+
     ## For multiprocessing
-    device = 'cpu'
+    # device = 'cpu'
 
     torch.set_default_device(device)
 
     # pygame.init()
 
     # Define the parameters for the evolutionary process
-    pop_size = 10
-    num_generations = 5
-    n_offspring = 10
+    pop_size = 20
+    num_generations = 900
+    n_offspring = 20
     # mutation_rate = 0.05
     mutation_rate = 0.5
 
@@ -1220,6 +1226,7 @@ def main():
     # done: change evolve, custom loss
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
+    _ = input('continue? ')
     visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
