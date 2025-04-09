@@ -1253,15 +1253,15 @@ def main():
     # pygame.init()
 
     # Define the parameters for the evolutionary process
-    pop_size = 20
+    pop_size = 40
     num_generations = 2500
-    n_offspring = 20
+    n_offspring = 40
     # mutation_rate = 0.05
     mutation_rate = 0.5
 
     # Create the Evolution object and run the evolution process
     # 
-    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
+    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':80, 'num_outputs':1})
     # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
     # done: change evolve, custom loss
     # game_args: maximum=100
