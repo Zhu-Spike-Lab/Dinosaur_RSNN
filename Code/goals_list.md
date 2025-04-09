@@ -3,20 +3,17 @@
 End goal: get a way to freeze the game, change the model in a custom way, then play the game step by step (like a debug feature)
 
 ## Immediately:
-What we've found out: Ivyer's code can't run: line ~654 threshold output for spiking is way too low
-	More importantly, the forward of the network absolutely does not work... should be fixed now I think
-
-Add multiprocessing to Ivyer Code?
+Get the graphs to make sense now that we've removed output linear layer
+Make RL work next!
 Ask Ulas for code about multiple neuron types
 RL Learning :)
 ---Ivyer's code move to gpu :)---
-Should use one-hot encoding? - yeah try it, but it's spiking so shouldn't really matter
 ---Need to change the way score is rewarded (give score when there's a good jump)---
 ---Need to remove references to pygame…---
 ---Can make it faster by not using pygame rects (I imagine)---
 Add a tiny bit more interactive-ness (graphs)
 Need to set it up with a plug and play benchmark for multiple types of networks...
-Read about LIF neurons for Yuqing
+---Read about LIF neurons for Yuqing---
 ---Integrate Ivyer's code as a library, work through initial issues---
 ---Potentially change the method of input---
 

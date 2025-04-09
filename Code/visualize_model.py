@@ -1,38 +1,67 @@
 import torch_multiprocessed as tm
 import torch
-import pandas as pd
+from torch.nn.utils import prune
 import pygame
-import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
+def prune_weights(model, pruning_rate=0.5):
+    pruner = prune.L1Unstructured(0.5)
+    shape = model.rlif1.recurrent.weight.data.shape
+    reshaped_weights = model.rlif1.recurrent.weight.reshape((shape[0] * shape[1]))
+    pruned = pruner.prune(reshaped_weights)
+    model.rlif1.recurrent.weight.data = pruned.reshape(shape)
 
-def main():
+    return model
 
-    # Define the parameters for the evolutionary process
-    pop_size = 20
-    num_generations = 9
-    n_offspring = 20
-    mutation_rate = 0.5
+def calc_sparsity(model):
+    zeros = torch.sum(model.rlif1.recurrent.weight.data == 0)
+    total = model.rlif1.recurrent.weight.data.numel()
+    sparsity = zeros.item() / total
+    return sparsity
 
-    # Create the Evolution object and run the evolution process
-    # 
-    evolution = tm.Evolution(tm.RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
-    # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
-    # done: change evolve, custom loss
-    # game_args: maximum=100
-    best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, tm.DinosaurGame, (100,), mutation_rate)
-    tm.visualize_model(best_model, tm.DinosaurGame, (100,))
+def disp_graph(model):
+    G = nx.DiGraph(model.rlif1.recurrent.weight.data.numpy().T)
+    nx.set_node_attributes(G, 'grey', 'color')
+    for u, v, w in G.edges.data('weight'):
+        if w > 0:
+            G.nodes[u]['color'] = 'blue'
+            G[u][v]['color'] = 'blue'
+        else:
+            G.nodes[u]['color'] = 'red'
+            G[u][v]['color'] = 'red'
+    G.nodes[0]['color'] = 'green'
+    node_colors = [c[1] for c in G.nodes.data('color')]
+    edge_colors = [c[2] for c in G.edges.data('color')]
+    nx.draw_circular(G, node_color=node_colors, edge_color=edge_colors, with_labels=False)
+    plt.show()
 
-    # Save the best model's state dictionary
-    torch.save(best_model.state_dict(), 'best_modelXXX.pth')
-
-
-# if __name__ == '__main__':
-#     main()
 
 if __name__ == '__main__':
-    filename = "connection_matrix.csv"
-    # with open(filename) as f:
+
+    model = tm.RSNN2(num_inputs=1, num_hidden=20, num_outputs=1)
+    # 'best_model Wed Apr  9 00:06:29 2025.pth'
+    filename = "best_model Wed Apr  9 00:06:29 2025.pth"
+    state_dict = torch.load(filename, weights_only=True)
+    
+    model.load_state_dict(state_dict)
+
+    # print(calc_sparsity(model))
+    prune_weights(model, pruning_rate=0.8)
+    # print(calc_sparsity(model))
+    
+    pygame.init()
+    WIDTH, HEIGHT = 800, 400
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    tm.visualize_model(model, tm.DinosaurGame, (100,))
+
+    disp_graph(model)
+
+
+# Old opening of csv file to get the state_dict
+
+# with open(filename) as f:
     #     ncols = len(f.readline().split(','))
     #     params = {}
     #     for line in f.readlines():
@@ -50,7 +79,7 @@ if __name__ == '__main__':
     # # print(pd.DataFrame(conn_mat))
     # # print(output_mat)
     # # state_dict = torch.load('/Users/dfairborn/Documents/Code Documents/Git Repos/Dinosaur_RSNN/best_modelXXX.pth', weights_only=True)
-    model = tm.RSNN2(num_inputs=1, num_hidden=20, num_outputs=1)
+    
     # # print(list(params.keys()))
     # rows = 1
     # for name, param in model.named_parameters():
@@ -65,13 +94,3 @@ if __name__ == '__main__':
     # print(model.l2.weight.data.shape)
     # print(output_mat.shape)
     # print(list(model.named_modules()))
-
-    # print('debug')
-    state_dict = torch.load('best_model Wed Apr  9 00:06:29 2025.pth', weights_only=True)
-    print(model.state_dict == state_dict)
-    model.load_state_dict(state_dict)
-    # print(state_dict)
-    pygame.init()
-    WIDTH, HEIGHT = 800, 400
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    tm.visualize_model(model, tm.DinosaurGame, (100,))

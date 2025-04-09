@@ -409,6 +409,7 @@ class RSNN2(nn.Module):
         self.p_nn = p_nn
         
         # Define the dimensions
+        # TODO: Change ratio?
         num_excitatory = round(0.85 * num_hidden) # 85% : 15% Excitatory to inhibitory
         self.num_excitatory = num_excitatory
         num_inhibitory = num_hidden - num_excitatory
@@ -726,9 +727,9 @@ class Evolution(object):
         model = self.model_class(*self.model_args, **self.model_kwargs)
         decode_model(model, gene)  
 
-        # Reapply the initial sparsity mask
+        # # Reapply the initial sparsity mask
         model_weights = model.rlif1.recurrent.weight.data
-        model_weights[self.sparse_mask == True] = 0
+        # model_weights[self.sparse_mask == True] = 0
 
         # Split the weights into excitatory and inhibitory
         excitatory_weights = model_weights[:, :model.num_excitatory]
@@ -741,7 +742,7 @@ class Evolution(object):
         # Ensure no neuron vanishes to enforce dale's law
         self.handle_vanishing_neurons(model, excitatory_weights, inhibitory_weights)  # Assuming handle_vanishing_neurons is a method of the class
 
-        # Actuall update the gene after doing all the checks
+        # Actually update the gene after doing all the checks
         gene = encode_model(model)
         return gene
     
