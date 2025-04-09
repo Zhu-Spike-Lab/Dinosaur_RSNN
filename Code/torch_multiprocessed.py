@@ -1275,18 +1275,23 @@ def main():
     # Usage example after evolution process
     initial_models = evolution.populate(pop_size)
     best_perf = evolution.decode_population(evolution.encode_population([best_model]), best_model)
+    
+    try:
 
-    plot_connectivity_changes_heat(initial_models, final_population)
-
-
-    final_models = evolution.decode_population(evolution.encode_population([best_model]), best_model)
-    plot_connectivity_changes_line(initial_models, final_models)
+        plot_connectivity_changes_heat(initial_models, final_population)
 
 
-    print_model_performance(best_model, DinosaurGame, (100,))
+        final_models = evolution.decode_population(evolution.encode_population([best_model]), best_model)
+        plot_connectivity_changes_line(initial_models, final_models)
 
-    # Save the connection matrix
-    save_parameters_to_csv(best_model, filename="best_model_connection_matrix_HPC.csv")
+
+        print_model_performance(best_model, DinosaurGame, (100,))
+    except:
+        print('Try block failed')
+    finally:
+
+        # Save the connection matrix
+        save_parameters_to_csv(best_model, filename="best_model_connection_matrix_HPC.csv")
 
 
 
