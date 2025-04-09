@@ -741,6 +741,8 @@ class Evolution(object):
         # Ensure no neuron vanishes to enforce dale's law
         self.handle_vanishing_neurons(model, excitatory_weights, inhibitory_weights)  # Assuming handle_vanishing_neurons is a method of the class
 
+        # Actuall update the gene after doing all the checks
+        gene = encode_model(model)
         return gene
     
     # dale's law implementation to ensure no neuron vanishes
@@ -1078,7 +1080,7 @@ def visualize_model(model, game_class, game_args):
 
             # 60 fps (time.time is in nanoseconds)
             # rest = (16670000 - (time.time() - start))/1000000000
-            rest = (16670000 - (time.time() - start))/1000000000
+            rest = (8670000 - (time.time() - start))/1000000000
             if rest > 0:
                 time.sleep(rest)
 
@@ -1166,9 +1168,9 @@ class DinosaurGame():
         if self.obstacle_x < -self.obstacle_width:
             self.obstacle_x = self.WIDTH
             self.score += 1
-            # # Speeding up
-            # if self.score % 10 == 0:
-            #     self.obstacle_speed += 1
+            # Speeding up
+            if self.score % 10 == 0:
+                self.obstacle_speed += 1
 
         # # Collision detection
         # dino_rect = pygame.Rect(self.dino_x, self.dino_y, self.dino_size, self.dino_size)
@@ -1202,7 +1204,24 @@ class DinosaurGame():
         score_text = font.render(f"Score: {self.score}", True, self.BLACK)
         screen.blit(score_text, (10, 10))
 
+######################## Test func
+# Function to save connection matrix to CSV
+def save_parameters_to_csv(model, filename="connection_matrix.csv"):
+    data = []
+    # model_weights = model.rlif1.recurrent.weight.data
+    for name, param in model.named_parameters():
+            weights = param.data.cpu().numpy()
+            if param.dim() == 1:
+                data.append([name] + list(weights))
+            else:
+                for row in weights:
+                    data.append([name] + list(row))
 
+    df = pd.DataFrame(data)
+    df.to_csv(filename, index=False)
+
+
+#######################
 
 def main():
 
@@ -1217,9 +1236,17 @@ def main():
     #     print('Set to spawn!')
 
     file_path = 'ooga.txt'
+    # Architecture:
+    # Runfile
+    # # Generation
+    # # # Model
+    # # # # Time
+    # # # # # Connection Mats
+    # # # # # Spikes and/or Neuron Values
+    # # # # # Game State
 
     ## For multiprocessing
-    # device = 'cpu'
+    device = 'cpu'
 
     torch.set_default_device(device)
 
@@ -1227,20 +1254,20 @@ def main():
 
     # Define the parameters for the evolutionary process
     pop_size = 20
-    num_generations = 900
+    num_generations = 2500
     n_offspring = 20
     # mutation_rate = 0.05
     mutation_rate = 0.5
 
     # Create the Evolution object and run the evolution process
     # 
-    evolution = Evolution(False, RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
+    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':20, 'num_outputs':1})
     # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
     # done: change evolve, custom loss
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
-    _ = input('continue? ')
-    visualize_model(best_model, DinosaurGame, (100,))
+    # _ = input('continue? ')
+    # visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
     torch.save(best_model.state_dict(), f'best_model {time.asctime()}.pth')
@@ -1257,6 +1284,11 @@ def main():
 
 
     print_model_performance(best_model, DinosaurGame, (100,))
+
+    # Save the connection matrix
+    save_parameters_to_csv(best_model, filename="best_model_connection_matrix_HPC.csv")
+
+
 
 
 if __name__ == '__main__':
