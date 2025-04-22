@@ -3,6 +3,7 @@
 # Changes: added np.flip to the select function to sort greatest to least fitness
 
 import os
+import sys
 import torch
 import snntorch as snn
 import torch.nn as nn
@@ -18,8 +19,11 @@ from torch.utils.data import Dataset, DataLoader
 import random
 from copy import deepcopy
 import seaborn as sns
+from torch.nn.utils import prune
+
 
 # # For game functions
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame
 import time
 
@@ -268,6 +272,8 @@ class RLIF1(LIF):
                 self.mem = self.mem - do_reset * self.threshold
             elif self.reset_mechanism_val == 1:
                 self.mem = self.mem - do_reset * self.mem
+        
+        print(f'Threshold: {self.threshold}, \nVoltage: {self.mem}, \nInput: {input_}, \nSpike: {self.spk}')
 
         if self.output:
             return self.spk, self.mem
@@ -410,7 +416,7 @@ class RSNN2(nn.Module):
         
         # Define the dimensions
         # TODO: Change ratio?
-        num_excitatory = round(0.85 * num_hidden) # 85% : 15% Excitatory to inhibitory
+        num_excitatory = round(0.85 * num_hidden) # 85% : 15% Excitatory to inhibitory originally
         self.num_excitatory = num_excitatory
         num_inhibitory = num_hidden - num_excitatory
 
@@ -436,8 +442,10 @@ class RSNN2(nn.Module):
         #input to hidden layer
         input_hid_mx = conn_mx(num_inputs, num_hidden, pe_e)
         self.input_hid_mx = input_hid_mx
-        self.l1 = nn.Linear(num_inputs,num_hidden)
+        self.l1 = nn.Linear(num_inputs,num_hidden, bias=False)
         self.l1.weight.data = input_hid_mx.T
+        # Create sparsity mask
+        self.input_sparsity_mask = torch.where(self.l1.weight.data == 0, 1, 0)
 
         # Recurrent layer weight matrix
         hidden_mx = hid_mx(num_excitatory, num_inhibitory, num_iPV, num_iSst, num_iHtr, p_nn) 
@@ -466,7 +474,9 @@ class RSNN2(nn.Module):
         # print(inputs.shape)
         for step in range(inputs.shape[0]):
             cur_input = inputs[step,:]
+            print(f'cur_input: {cur_input}')
             cur1 = self.l1(cur_input)
+            print(f'cur1: {cur1[0]}, {cur1[22]}')
             self.spk1,self.mem1 = self.rlif1(cur1, self.spk1, self.mem1)
             # self.mem1 = self.mem1
             # cur2 = self.l2(self.spk1)
@@ -646,13 +656,13 @@ class Evolution(object):
     def decode_population(self, genes, template_model):
         return [decode_model(template_model, gene) for gene in genes]
 
-    def evaluate(self, models, game_class, game_args):
+    def evaluate(self, models, game_class, game_args, jumps=False):
         if self.multi:
             fitness = [0 for _ in range(len(models))]
             processes = []
             q = mp.Queue()
             for i, model in enumerate(models):
-                processes.append(mp.Process(target=self.queue_eval_model, args=(q, i, model, game_class, game_args)))
+                processes.append(mp.Process(target=self.queue_eval_model, args=(q, i, model, game_class, game_args, jumps)))
                 processes[i].start()
 
             for i in range(len(models)):
@@ -667,18 +677,18 @@ class Evolution(object):
         else:
             fitness = []
             for model in models:
-                loss = self.evaluate_model(model, game_class, game_args).item()
+                loss = self.evaluate_model(model, game_class, game_args, jumps)
                 fitness.append(loss)
             return fitness
 
     # Multiprocess the evaluation of models
-    def queue_eval_model(self, q, id, model, game_class, game_args):
-        loss = self.evaluate_model(model, game_class, game_args)
+    def queue_eval_model(self, q, id, model, game_class, game_args, jumps=False):
+        loss = self.evaluate_model(model, game_class, game_args, jumps)
         q.put((id, loss))
         return
 
     # evaluate a model with the dinosaur dataloader
-    def evaluate_model(self, model, game_class, game_args):
+    def evaluate_model(self, model, game_class, game_args, jumps=False):
         criterion = CustomLoss(target_firing_rate=0.02, batch_size=1)
         running_loss = 0
         game = game_class(*game_args)
@@ -689,15 +699,16 @@ class Evolution(object):
             while game.alive:
                 inputs = torch.tensor([[game.get_input(),]], dtype=torch.float)
                 outputs, spikes = model(inputs)
-                firing_rate = torch.sum(spikes) / torch.tensor(spikes.numel(), dtype=torch.float)
-                loss = criterion(firing_rate)
-                running_loss -= loss.item()
+                # firing_rate = torch.sum(spikes) / torch.tensor(spikes.numel(), dtype=torch.float)
+                # loss = criterion(firing_rate)
+                # running_loss -= loss.item()
 
                 # choice = int((sum(outputs) >= 1)) # 0.05
                 choice = spikes[0,0]
-                # Punish jumps
-                running_loss -= 0.2 * choice
-                # print(f'Outs: {outputs}, sum: {sum(outputs)}')
+                if jumps:
+                    # Punish jumps
+                    running_loss -= 0.2 * choice
+                print(f'Outs: {outputs}, sum: {sum(outputs)}')
                 game.step(choice)
             
             # Reward a good score...
@@ -725,9 +736,9 @@ class Evolution(object):
 
         # Decode the gene to model format
         model = self.model_class(*self.model_args, **self.model_kwargs)
-        decode_model(model, gene)  
+        model = decode_model(model, gene)  
 
-        # # Reapply the initial sparsity mask
+        # Reapply the initial sparsity mask
         model_weights = model.rlif1.recurrent.weight.data
         # model_weights[self.sparse_mask == True] = 0
 
@@ -735,12 +746,21 @@ class Evolution(object):
         excitatory_weights = model_weights[:, :model.num_excitatory]
         inhibitory_weights = model_weights[:, model.num_excitatory:]
 
-        # Clamp switched sign values at 0
-        excitatory_weights.clamp_(min=0)
-        inhibitory_weights.clamp_(max=0)
-
         # Ensure no neuron vanishes to enforce dale's law
         self.handle_vanishing_neurons(model, excitatory_weights, inhibitory_weights)  # Assuming handle_vanishing_neurons is a method of the class
+
+        # Could enforce sparsity here:
+        
+        model_weights = model.rlif1.recurrent.weight.data
+        sparsity = torch.sum(model_weights == 0) / model_weights.numel()
+        if sparsity < 0.8: # Where 0.8 is the desired sparsity threshold
+            linearized = model_weights.reshape(-1)
+            pruner = prune.L1Unstructured(float(0.8-sparsity))
+            pruned = pruner.prune(linearized)
+            model.rlif1.recurrent.weight.data = pruned.reshape(model_weights.shape)
+
+        # Apply the input sparsity mask
+        model.l1.weight.data[model.input_sparsity_mask == 1] = 0
 
         # Actually update the gene after doing all the checks
         gene = encode_model(model)
@@ -755,6 +775,10 @@ class Evolution(object):
 
         num_false_neg = torch.sum(excitatory_weights < 0).item()
         num_false_pos = torch.sum(inhibitory_weights > 0).item()
+
+        # Clamp switched sign values at 0
+        excitatory_weights.clamp_(min=0)
+        inhibitory_weights.clamp_(max=0)
 
         excitatory_zero_indices = (model.rlif1.recurrent.weight.data[:, :num_excitatory] == 0).nonzero(as_tuple=True)
         inhibitory_zero_indices = (model.rlif1.recurrent.weight.data[:, num_excitatory:] == 0).nonzero(as_tuple=True)
@@ -835,55 +859,79 @@ class Evolution(object):
         
         # intialize first population of models
         models = self.populate(n_models)
+        initial_models = deepcopy(models)
         genes = self.encode_population(models)
         all_best_fitness = []
         all_fitness = []
+        all_genes = []
         best_gene_overall = None
         # best_fitness_overall = float('inf')
         best_fitness_overall = float('-inf')
         
         # run the evolution process for n_generations
-        for i in range(n_generations):
-            models = self.decode_population(genes, template_model)
-            fitness = self.evaluate(models, game_class, game_args)
-            all_fitness.append(fitness)
-            parents, parent_fitness = self.select(genes, fitness)
-            offspring = self.generate_offspring(parents, n_offspring, mutation_rate)
-            genes = parents + offspring
-            best_fitness = min(parent_fitness)
-            all_best_fitness.append(best_fitness)
-
-
-            # if best_fitness <= 95 and best_fitness_overall <= 50:
-            #     ### Visualization for Papa
-            #     best_gene_overall = deepcopy(parents[0])
-            #     best_model = self.decode_population([best_gene_overall], template_model)[0]
-            #     visualize_model(best_model, DinosaurGame, (100,))
-
-
-            if best_fitness >= best_fitness_overall:
-                best_fitness_overall = best_fitness
-                best_gene_overall = deepcopy(parents[0])
+        try:
+            for i in range(n_generations):
+                models = self.decode_population(genes, template_model)
+                if i < n_generations/2:
+                    jumps = False
+                else:
+                    jumps = True
+                fitness = self.evaluate(models, game_class, game_args, jumps=jumps)
+                all_fitness.append(fitness)
+                parents, parent_fitness = self.select(genes, fitness)
+                offspring = self.generate_offspring(parents, n_offspring, mutation_rate)
+                genes = parents + offspring
+                all_genes.append(genes)
+                best_fitness = min(parent_fitness)
+                all_best_fitness.append(best_fitness)
                 
-            print(f'Generation {i+1}/{n_generations}, Best Fitness: {best_fitness}')
-            print(f'Overall Best Fitness: {best_fitness_overall}')
 
-        self.plot_best_fitness(all_best_fitness)
-        self.plot_average_fitness(all_fitness)
-        self.plot_fitness_distribution(all_fitness)
 
-        best_model = self.decode_population([best_gene_overall], template_model)[0]
-        final_population = self.decode_population(genes, template_model)
+                # if best_fitness <= 95 and best_fitness_overall <= 50:
+                #     ### Visualization for Papa
+                #     best_gene_overall = deepcopy(parents[0])
+                #     best_model = self.decode_population([best_gene_overall], template_model)[0]
+                #     visualize_model(best_model, DinosaurGame, (100,))
 
-        # np.savez_compressed('evolution_data.npz',
-        #                     all_genes=all_genes,
-        #                     all_best_fitness=all_best_fitness,
-        #                     all_fitness=all_fitness,
-        #                     best_gene_overall=best_gene_overall,
-        #                     best_fitness_overall=best_fitness_overall
-        #                     initial_models=initial_models
-        #                     final_population=final_population
-        #                     best_model=best_model)
+
+                if best_fitness >= best_fitness_overall:
+                    best_fitness_overall = best_fitness
+                    best_gene_overall = deepcopy(parents[0])
+                    
+                print(f'Generation {i+1}/{n_generations}, Best Fitness: {best_fitness}')
+                print(f'Overall Best Fitness: {best_fitness_overall}')
+
+                if i >= 500 and best_fitness_overall < 12:
+                    # Restart & try again
+                    print('Best fitness is too low, restarting...')
+                    os.execv(sys.executable, ['python'] + sys.argv)
+                    sys.exit()
+
+
+
+        except KeyboardInterrupt:
+            print('Finalizing...')
+            if input('Quit? (y/n): ').lower() == 'y':
+                print('Exiting...')
+                raise KeyboardInterrupt
+                return None, None, None
+        finally:
+            self.plot_best_fitness(all_best_fitness)
+            self.plot_average_fitness(all_fitness)
+            self.plot_fitness_distribution(all_fitness)
+
+            best_model = decode_model(template_model, best_gene_overall)
+            final_population = self.decode_population(genes, template_model)
+
+            # np.savez_compressed('evolution_data.npz',
+            #                 all_genes=all_genes,
+            #                 all_best_fitness=all_best_fitness,
+            #                 all_fitness=all_fitness,
+            #                 best_gene_overall=best_gene_overall,
+            #                 best_fitness_overall=best_fitness_overall,
+            #                 initial_models=initial_models,
+            #                 final_population=final_population,
+            #                 best_model=best_model)
         
         return best_model, all_best_fitness, final_population
 
@@ -906,8 +954,6 @@ def plot_spike_tensor(spk_tensor, title):
     axs.set_title(title)
 
     plt.savefig(f'Data/Spikes {time.asctime()}.png')
-
-
 
 # generates heatmaps to capture the connectivity changes between the initial and final models
 def plot_connectivity_changes_heat(initial_models, final_models):
@@ -1017,36 +1063,10 @@ def print_model_performance(model, game_class, game_args):
                 game.step(choice)
             
             # Print the score
-            print(game.score) 
+            print(f'Score: {game.score}') 
 
         # plot_spike_tensor(spikes, title='Spike Trains')
 
-
-
-    # model.eval()
-    # with torch.no_grad():
-    #     for batch_idx, (inputs, targets) in enumerate(dataloader):
-    #         outputs, spikes = model(inputs)
-            
-    #         for i in range(min(10, len(targets))):  # Visualize up to 10 samples
-    #             target = targets[i].cpu().numpy()
-    #             output = outputs[i].cpu().numpy()
-
-    #             x_target = np.arange(len(target))
-    #             x_output = np.arange(len(output))
-
-    #             plt.plot(x_target, target, label=f'Target {i+1}', alpha=0.6)
-    #             plt.plot(x_output, output, label=f'Output {i+1}', alpha=0.6)
-
-    #             plt.xlabel('Index')
-    #             plt.ylabel('Value')
-    #             plt.title('Model Performance')
-    #             plt.legend()
-    #             plt.grid(True)
-    #             plt.show()
-
-    #         break  # Only plot for the first batch
-    # plot_spike_tensor(spikes, title='Spike Trains')
 
 def visualize_model(model, game_class, game_args):
     # Initialize Pygame
@@ -1081,9 +1101,12 @@ def visualize_model(model, game_class, game_args):
 
             # 60 fps (time.time is in nanoseconds)
             # rest = (16670000 - (time.time() - start))/1000000000
+            # _ = input('next frame: ')
             rest = (8670000 - (time.time() - start))/1000000000
             if rest > 0:
                 time.sleep(rest)
+        
+        print(f'Score: {game.score}')
 
 
       
@@ -1123,6 +1146,9 @@ class DinosaurGame():
         # Game loop
         self.clock = pygame.time.Clock()
 
+        # input memory
+        self.input_mem = []
+
         if maximum:
             self.maximum = maximum
         else:
@@ -1142,10 +1168,23 @@ class DinosaurGame():
         # cross_time = self.WIDTH / self.obstacle_speed
         # obs_pos = (time % cross_time) * self.obstacle_speed
         obs_pos = self.obstacle_x
-        if 441 <= obs_pos <= 459:
-            return 1
+        
+        if 441 <= obs_pos <= 459: # 457 seems to work ok
+            input = 1
         else:
-            return 0
+            input = 0
+
+        if sum(self.input_mem) == 1:
+            self.input_mem.append(0)
+        else:
+            self.input_mem.append(input)
+        
+        return self.input_mem[-1]
+
+        # if 441 <= obs_pos <= 459:
+        #     return 1
+        # else:
+        #     return 0
         # return [1 if self.time % 45 == 0 else 0]
 
     def step(self, action):
@@ -1169,6 +1208,8 @@ class DinosaurGame():
         if self.obstacle_x < -self.obstacle_width:
             self.obstacle_x = self.WIDTH
             self.score += 1
+            # reset the input memory
+            self.input_mem = []
             # Speeding up
             if self.score % 10 == 0:
                 self.obstacle_speed += 1
@@ -1198,11 +1239,19 @@ class DinosaurGame():
         obstacle_rect = pygame.Rect(self.obstacle_x, self.obstacle_y, self.obstacle_width, self.obstacle_height)
 
         # Draw dinosaur and obstacle
-        pygame.draw.rect(screen, self.BLACK, dino_rect)
-        pygame.draw.rect(screen, self.BLACK, obstacle_rect)
+        if len(self.input_mem) == 0:
+            input_mem = 0
+        else:
+            input_mem = self.input_mem[-1]
+        if input_mem: #HELP
+            pygame.draw.rect(screen, (255,0,0), dino_rect)
+            pygame.draw.rect(screen, (255,0,0), obstacle_rect)
+        else:
+            pygame.draw.rect(screen, self.BLACK, dino_rect)
+            pygame.draw.rect(screen, self.BLACK, obstacle_rect)
 
         # Draw score
-        score_text = font.render(f"Score: {self.score}", True, self.BLACK)
+        score_text = pygame.font.Font(None, 36).render(f"Score: {self.score}", True, self.BLACK)
         screen.blit(score_text, (10, 10))
 
 ######################## Test func
@@ -1254,45 +1303,43 @@ def main():
     # pygame.init()
 
     # Define the parameters for the evolutionary process
-    pop_size = 40
-    num_generations = 2500
-    n_offspring = 40
+    pop_size = 20
+    num_generations = 5000
+    n_offspring = 20
     # mutation_rate = 0.05
     mutation_rate = 0.5
 
     # Create the Evolution object and run the evolution process
     # 
-    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':80, 'num_outputs':1})
+    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':40, 'num_outputs':1})
     # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
     # done: change evolve, custom loss
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
     # _ = input('continue? ')
-    # visualize_model(best_model, DinosaurGame, (100,))
+    visualize_model(best_model, DinosaurGame, (100,))
 
     # Save the best model's state dictionary
-    torch.save(best_model.state_dict(), f'best_model {time.asctime()}.pth')
+    filename = f'best_model {time.asctime()}.pth'
+    print(filename)
+    torch.save(best_model.state_dict(), filename)
 
     # Usage example after evolution process
     initial_models = evolution.populate(pop_size)
     best_perf = evolution.decode_population(evolution.encode_population([best_model]), best_model)
     
-    try:
 
-        plot_connectivity_changes_heat(initial_models, final_population)
-
-
-        final_models = evolution.decode_population(evolution.encode_population([best_model]), best_model)
-        plot_connectivity_changes_line(initial_models, final_models)
+    plot_connectivity_changes_heat(initial_models, final_population)
 
 
-        print_model_performance(best_model, DinosaurGame, (100,))
-    except:
-        print('Try block failed')
-    finally:
+    final_models = evolution.decode_population(evolution.encode_population([best_model]), best_model)
+    plot_connectivity_changes_line(initial_models, final_models)
+
+
+    print_model_performance(best_model, DinosaurGame, (100,))
 
         # Save the connection matrix
-        save_parameters_to_csv(best_model, filename="best_model_connection_matrix_HPC.csv")
+        # save_parameters_to_csv(best_model, filename="best_model_connection_matrix_mac.csv")
 
 
 
