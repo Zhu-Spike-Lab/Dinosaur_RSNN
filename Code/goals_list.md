@@ -3,19 +3,14 @@
 End goal: get a way to freeze the game, change the model in a custom way, then play the game step by step (like a debug feature)
 
 ## Immediately:
-Get the graphs to make sense now that we've removed output linear layer
-Make RL work next!
-Ask Ulas for code about multiple neuron types
+Analyze big model @ diff levels of pruning
+Figure out why no bias model has baseline activity
+Could be interesting to see solutions when input is dense (to all neurons) or sparse (only to 1)
+Most-ish realistic: 20% get input, 20% of available connections
+--Also need to try to reduce the mutation rate- should help quite a bit--
 RL Learning :)
----Ivyer's code move to gpu :)---
----Need to change the way score is rewarded (give score when there's a good jump)---
----Need to remove references to pygame…---
----Can make it faster by not using pygame rects (I imagine)---
-Add a tiny bit more interactive-ness (graphs)
-Need to set it up with a plug and play benchmark for multiple types of networks...
----Read about LIF neurons for Yuqing---
----Integrate Ivyer's code as a library, work through initial issues---
----Potentially change the method of input---
+Why does the big model behave the way it does? -> visualize the spikes
+Why does the new model still display baseline activity without input?
 
 Temporal Ideas
 
