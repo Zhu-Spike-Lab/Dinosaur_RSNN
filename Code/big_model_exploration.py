@@ -82,8 +82,8 @@ if __name__ == '__main__':
     model.load_state_dict(state_dict)
 
     print(calc_sparsity(model))
-    # big_prune = prune_weights(model, pruning_rate=0.1615)
-    little_prune = prune_weights(model, pruning_rate=0.15) # 0.2 failed in a very interesting way
+    # big_prune = prune_weights(model, pruning_rate=0.1615) # fails
+    little_prune = prune_weights(model, pruning_rate=0.15) # doesn't fail
     # print(torch.equal(big_prune, little_prune))
     # print(torch.sum(big_prune - little_prune != 0))
     # diffs = torch.where(big_prune - little_prune != 0)

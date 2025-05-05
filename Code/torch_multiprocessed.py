@@ -209,7 +209,7 @@ class RLIF1(LIF):
 
     def _init_mem(self):
         spk = torch.zeros(0)
-        mem = torch.zeros(0)
+        mem = torch.ones(0) * -70 # Default membrane potential of -70 mV
         refractory_counter = torch.zeros(0)
 
         self.register_buffer('spk', spk, False)
@@ -255,6 +255,7 @@ class RLIF1(LIF):
 
         # Update the membrane potential
         self.reset = self.mem_reset(self.mem)
+        # print(f'Reset: {self.reset}')
         self.mem = self.state_function(input_)
 
         # Set a spike on when refractory period is 0
@@ -273,7 +274,8 @@ class RLIF1(LIF):
             elif self.reset_mechanism_val == 1:
                 self.mem = self.mem - do_reset * self.mem
         
-        print(f'Threshold: {self.threshold}, \nVoltage: {self.mem}, \nInput: {input_}, \nSpike: {self.spk}')
+        # print(f'State function bias: {self.recurrent.bias}')
+        # print(f'Threshold: {self.threshold}, \nVoltage: {self.mem}, \nInput: {input_}, \nSpike: {self.spk}')
 
         if self.output:
             return self.spk, self.mem
@@ -292,7 +294,7 @@ class RLIF1(LIF):
             self._init_recurrent_one_to_one()
 
     def _init_recurrent_linear(self):
-        self.recurrent = nn.Linear(self.linear_features, self.linear_features)
+        self.recurrent = nn.Linear(self.linear_features, self.linear_features, bias=False)
 
     def _init_recurrent_conv2d(self):
         self._init_padding()
@@ -455,7 +457,7 @@ class RSNN2(nn.Module):
         #hidden to output layer
         # For the purposes of our game, this is pretty much completely unnecessary and can be replaced w a single output neuron
         hid_out_mx = conn_mx(num_hidden,num_output,pe_e)
-        self.l2 = nn.Linear(num_hidden, num_output)
+        self.l2 = nn.Linear(num_hidden, num_output, bias=False)
         self.l2.weight.data = hid_out_mx.T 
 
         self.spk1,self.mem1 = self.rlif1.init_rleaky()
@@ -474,9 +476,9 @@ class RSNN2(nn.Module):
         # print(inputs.shape)
         for step in range(inputs.shape[0]):
             cur_input = inputs[step,:]
-            print(f'cur_input: {cur_input}')
+            # print(f'cur_input: {cur_input}')
             cur1 = self.l1(cur_input)
-            print(f'cur1: {cur1[0]}, {cur1[22]}')
+            # print(f'cur1: {cur1}')
             self.spk1,self.mem1 = self.rlif1(cur1, self.spk1, self.mem1)
             # self.mem1 = self.mem1
             # cur2 = self.l2(self.spk1)
@@ -708,7 +710,7 @@ class Evolution(object):
                 if jumps:
                     # Punish jumps
                     running_loss -= 0.2 * choice
-                print(f'Outs: {outputs}, sum: {sum(outputs)}')
+                # print(f'Outs: {outputs}, sum: {sum(outputs)}')
                 game.step(choice)
             
             # Reward a good score...
@@ -752,15 +754,22 @@ class Evolution(object):
         # Could enforce sparsity here:
         
         model_weights = model.rlif1.recurrent.weight.data
-        sparsity = torch.sum(model_weights == 0) / model_weights.numel()
-        if sparsity < 0.8: # Where 0.8 is the desired sparsity threshold
+        zeros = torch.sum(model_weights == 0) 
+        target = model_weights.numel() * 0.5 # Where 0.8 is the desired sparsity threshold #TODO
+        if zeros < target: 
             linearized = model_weights.reshape(-1)
-            pruner = prune.L1Unstructured(float(0.8-sparsity))
+            pruner = prune.L1Unstructured(int(target - zeros))
             pruned = pruner.prune(linearized)
             model.rlif1.recurrent.weight.data = pruned.reshape(model_weights.shape)
 
         # Apply the input sparsity mask
         model.l1.weight.data[model.input_sparsity_mask == 1] = 0
+
+        # Remove self-connections in the recurrent layer
+        diag_ones = torch.eye(model.rlif1.recurrent.weight.data.shape[0], device=model.rlif1.recurrent.weight.data.device)
+        ones = torch.ones(model.rlif1.recurrent.weight.data.shape[0], device=model.rlif1.recurrent.weight.data.device)
+        mask = ones - diag_ones
+        model.rlif1.recurrent.weight.data *= mask  # Remove self-connections
 
         # Actually update the gene after doing all the checks
         gene = encode_model(model)
@@ -901,7 +910,7 @@ class Evolution(object):
                 print(f'Generation {i+1}/{n_generations}, Best Fitness: {best_fitness}')
                 print(f'Overall Best Fitness: {best_fitness_overall}')
 
-                if i >= 500 and best_fitness_overall < 12:
+                if i >= 750 and best_fitness_overall < 2:
                     # Restart & try again
                     print('Best fitness is too low, restarting...')
                     os.execv(sys.executable, ['python'] + sys.argv)
@@ -1162,7 +1171,7 @@ class DinosaurGame():
 
     def get_input(self):
         # Return input: 1 if obstacle, 0 if not (obstacles appear every few timesteps)
-        # TODO: Give position of obstacle just for funsies
+        # Should try to give position of obstacle just for funsies
         # Could give distance btw obstacle and character
         # Could give its own position & object's position
         # cross_time = self.WIDTH / self.obstacle_speed
@@ -1311,9 +1320,9 @@ def main():
 
     # Create the Evolution object and run the evolution process
     # 
-    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':40, 'num_outputs':1})
+    evolution = Evolution(True, RSNN2, (), {'num_inputs':1, 'num_hidden':128, 'num_outputs':1})
     # Note: evolve method was altered from Ivyer's OG code so we code Dino-ify it :)
-    # done: change evolve, custom loss
+
     # game_args: maximum=100
     best_model, fitness, final_population = evolution.evolve(pop_size, n_offspring, num_generations, DinosaurGame, (100,), mutation_rate)
     # _ = input('continue? ')

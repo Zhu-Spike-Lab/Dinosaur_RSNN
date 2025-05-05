@@ -139,7 +139,7 @@ if __name__ == '__main__':
     model.rlif1.recurrent.weight.data[:, 1:4] = 0
     model.rlif1.recurrent.weight.data[:, 5:] = 0
 
-    print(f'State dict: {state_dict}')
+    # print(f'State dict: {state_dict}')
 
 
     # print(calc_sparsity(model))
@@ -165,10 +165,10 @@ if __name__ == '__main__':
 
     # Calculate eigenvectors
     eigenvalues, eigenvectors = np.linalg.eig(laplacian)
-    print(eigenvalues.shape)
+    # print(eigenvalues.shape)
     eigenvalues = np.real(eigenvalues) # Ensure eigenvalues are real
     eigenvalues = np.round(eigenvalues, 3) # Round to 3 decimal places for better visualization
-    print(eigenvalues)
+    # print(eigenvalues)
 
     # Graph eigenvector histogram
     sns.set(style="whitegrid")

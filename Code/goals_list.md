@@ -3,7 +3,13 @@
 End goal: get a way to freeze the game, change the model in a custom way, then play the game step by step (like a debug feature)
 
 ## Immediately:
+---Constrain self-connections (not biologically realistic)---
+Save the initial model to see what makes it work
+Constrain sparsity more harshly
+Make the model smaller again
+Check big model analysis for rendering bugs
 Analyze big model @ diff levels of pruning
+Aim for coupling probability if 20%
 Figure out why no bias model has baseline activity
 Could be interesting to see solutions when input is dense (to all neurons) or sparse (only to 1)
 Most-ish realistic: 20% get input, 20% of available connections

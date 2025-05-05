@@ -1,4 +1,4 @@
-import torch_multiprocessed as tm
+import torch_multiprocessed_bias as tm
 import torch
 from torch.nn.utils import prune
 import pygame
@@ -50,6 +50,10 @@ def generate_graph(model):
 def disp_graph(graph, spikes=None):
     G = graph
 
+    nx.set_node_attributes(G, 'black', 'color')
+    
+    G.nodes[0]['color'] = 'green'
+
     
     # for u, v, w in G.edges.data('weight'):
     #         if w > 0:
@@ -80,8 +84,8 @@ def disp_graph(graph, spikes=None):
 
     node_colors = [c[1] for c in G.nodes.data('color')]
     edge_colors = [c[2] for c in G.edges.data('color')]
-    with plt.xkcd():
-        nx.draw_circular(G, node_color=node_colors, edgelist=edgelist, edge_color=edge_colors, with_labels=False, connectionstyle="arc3,rad=0.1")
+    # with plt.xkcd():
+    nx.draw_circular(G, node_color=node_colors, edgelist=edgelist, edge_color=edge_colors, with_labels=False, connectionstyle="arc3,rad=0.1")
     plt.show(block=False)
 
     # plt.pause(0.001)
@@ -130,7 +134,7 @@ def visualize_model(model, game_class, game_args):
     disp_graph(graph)
 
     with torch.no_grad():
-        with imageio.get_writer("vid.mp4", fps=fps, codec='libx264', format='ffmpeg') as writer:
+        # with imageio.get_writer("vid.mp4", fps=fps, codec='libx264', format='ffmpeg') as writer:
             # Run the game
             while game.alive:
                 start = time.time()
@@ -148,37 +152,37 @@ def visualize_model(model, game_class, game_args):
                 screen.fill((255, 255, 255))
                 game.visualize(screen)
 
-                # Save frame to video
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
-                plt.close()
-                buf.seek(0)
-                pip_img = Image.open(buf).convert("RGB")
-                pip_img = pip_img.resize(pip_size)
-                pip_array = np.array(pip_img)
+                # # Save frame to video
+                # buf = io.BytesIO()
+                # plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+                # plt.close()
+                # buf.seek(0)
+                # pip_img = Image.open(buf).convert("RGB")
+                # pip_img = pip_img.resize(pip_size)
+                # pip_array = np.array(pip_img)
                 
-                # --- Convert pygame screen to numpy array ---
-                pg_array = pygame.surfarray.array3d(screen).swapaxes(0, 1)  # Shape: (H, W, 3)
+                # # --- Convert pygame screen to numpy array ---
+                # pg_array = pygame.surfarray.array3d(screen).swapaxes(0, 1)  # Shape: (H, W, 3)
     
-                # --- Composite picture-in-picture ---
-                frame = pg_array.copy()  # Ensure writable
-                frame[0:pip_array.shape[0], 0:pip_array.shape[1], :] = pip_array
+                # # --- Composite picture-in-picture ---
+                # frame = pg_array.copy()  # Ensure writable
+                # frame[0:pip_array.shape[0], 0:pip_array.shape[1], :] = pip_array
     
-                # --- Write frame ---
-                frame = np.ascontiguousarray(frame, dtype=np.uint8)
+                # # --- Write frame ---
+                # frame = np.ascontiguousarray(frame, dtype=np.uint8)
                 
-                writer.append_data(frame)
-                print(f'Frame added to video: {game.score / 50 * 100}% complete')
+                # writer.append_data(frame)
+                # print(f'Frame added to video: {game.score / 50 * 100}% complete')
 
-                # # Update display
-                # pygame.display.flip()
+                # Update display
+                pygame.display.flip()
 
 
                 # 60 fps (time.time is in nanoseconds)
                 # rest = (20000000 - (time.time() - start))/1000000000
-                # _ = input('next frame: ')
+                _ = input('next frame: ')
                 # if rest > 0:
-                    # time.sleep(rest)
+                #     time.sleep(rest)
             
             print(f'Score: {game.score}')
 
