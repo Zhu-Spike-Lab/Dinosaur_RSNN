@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import purported_no_bias_exploration as pnbe
+import little_model_exploration as vm
 
 
 def prune_weights(model, pruning_rate=0.5):
@@ -89,9 +90,9 @@ if __name__ == '__main__':
     # diffs = torch.where(big_prune - little_prune != 0)
     # print(diffs)
     # print(f'big: {big_prune[diffs]}')
-    print(f'little: {little_prune[7, 61].detach().numpy()}')
-    little_prune[7, 61] = 0
-    # model.rlif1.recurrent.weight.data = little_prune
+    # print(f'little: {little_prune[7, 61].detach().numpy()}')
+    # little_prune[7, 61] = 0
+    model.rlif1.recurrent.weight.data = little_prune
     # df = pd.DataFrame(little_prune.detach().numpy())
     # print(df)
     # df.to_csv('little.csv')
@@ -102,6 +103,7 @@ if __name__ == '__main__':
     WIDTH, HEIGHT = 800, 400
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pnbe.visualize_model(model, tm.DinosaurGame, (100,))
+    # vm.visualize_model(model, tm.DinosaurGame, (100,))
 
     G = disp_graph(model)
 
