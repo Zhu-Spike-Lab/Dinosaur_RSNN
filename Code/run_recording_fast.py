@@ -10,10 +10,20 @@ import io
 from PIL import Image
 import time
 import multiprocessing as mp
+import sys
 
+# Printing functions
+def line_1(word):
+    sys.stdout.write('\033[K')
+    sys.stdout.write(word + '\r')
+    sys.stdout.flush()
 
-
-
+def line_2(word):
+    sys.stdout.write(f'\033[{1}B')
+    sys.stdout.write('\033[K')
+    sys.stdout.write(word + '\r')
+    sys.stdout.write(f'\033[{1}A')
+    sys.stdout.flush()
 
 def generate_graph(model):
     G = nx.DiGraph(model.rlif1.recurrent.weight.data.numpy().T)
@@ -198,7 +208,9 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     status = mp.Value('i', 0)
 
     # Start the processes
+    print('Rendering graphs...')
     for i, spikes in enumerate(all_spikes):
+        line_1(f'Spinning up: {i / len(all_spikes) * 100:.2f}% completed')
         processes.append(mp.Process(target=queue_render_graph, args=(q, i, status, len(all_spikes), G, spikes, pip_size)))
         processes[i].start()
 
@@ -209,6 +221,8 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     for p in processes:
         p.join()
     
+    sys.stdout.write(f'\033[{2}B')
+    sys.stdout.flush()
     print()
     
     return graph_frames
@@ -229,7 +243,7 @@ def queue_render_graph(q, id, status, total, G, spikes, pip_size):
     q.put((id, graph_array))
     with status.get_lock():
         status.value += 1
-        print(f'Rendering graphs: {status.value / total * 100:.2f}% completed', end='\r')
+        line_2(f'Rendering graphs: {status.value / total * 100:.2f}% completed')
     return
 
 
