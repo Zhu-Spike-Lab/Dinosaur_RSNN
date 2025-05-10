@@ -214,7 +214,15 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
         processes.append(mp.Process(target=queue_render_graph, args=(q, i, status, len(all_spikes), G, spikes, pip_size)))
         processes[i].start()
 
-    for i in range(len(all_spikes)):
+        # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
+        if q.qsize() > 0:
+            id, graph_array = q.get()
+            graph_frames[id] = graph_array
+            processes[i].join()
+            time.sleep(0.1)
+
+    # Get all the remaining items from the queue
+    for i in range(q.qsize()):
         id, graph_array = q.get()
         graph_frames[id] = graph_array
         
@@ -287,10 +295,18 @@ def multi_combine(game_frames, graph_frames, verbose=False):
         processes.append(mp.Process(target=queue_combine_frame, args=(q, i, status, num_frames, game_frames[i], graph_frames[i])))
         processes[i].start()
 
-    for i in range(num_frames):
+    # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
+        if q.qsize() > 0:
+            id, frame = q.get()
+            frames[id] = frame
+            processes[i].join()
+            time.sleep(0.1)
+
+    # Get all the remaining items from the queue
+    for i in range(q.qsize()):
         id, frame = q.get()
         frames[id] = frame
-    
+        
     for p in processes:
         p.join()
 
