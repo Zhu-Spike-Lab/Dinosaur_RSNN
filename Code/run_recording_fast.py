@@ -39,7 +39,6 @@ def generate_graph(model):
 
     return G
 
-
 def disp_graph(graph, spikes=None):
     G = graph
 
@@ -75,7 +74,6 @@ def disp_graph(graph, spikes=None):
     plt.draw()
     
     return G
-
 
 # Run game: capture frames & spikes
 def run_game(model, game_class, game_args, verbose=False):
@@ -142,7 +140,7 @@ def run_game(model, game_class, game_args, verbose=False):
                 pg_array = pygame.surfarray.array3d(screen).swapaxes(0, 1)  # Shape: (H, W, 3)
                 game_frames.append(pg_array)
 
-                # time.sleep(0.001)
+                time.sleep(0.001)
             
             print(f'Score: {game.score}')
 
@@ -194,20 +192,24 @@ def render_graphs(model, all_spikes, pip_size, verbose=False):
 # Multiprocessed version
 def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     G = generate_graph(model)
+    total = len(all_spikes)
 
-    graph_frames = [[] for _ in range(len(all_spikes))]
+
+    graph_frames = [[] for _ in range(total)]
+    rendered_frames = np.array([1 for _ in range(total)])
     processes = []
     q = mp.Queue()
     status = mp.Value('i', 0)
-    total = len(all_spikes)
     max_concurrent = 100  # Maximum number of concurrent processes
 
-    print('Rendering graphs...')
+    if verbose:
+        print('Rendering graphs...')
     for i, spikes in enumerate(all_spikes):
-        line_1(f'Spinning up: {i / total * 100:.2f}% completed')
+        if verbose:
+            line_1(f'Spinning up: {i / total * 100:.2f}% completed')
         
         # Start new process
-        p = mp.Process(target=queue_render_graph, args=(q, i, status, total, G, spikes, pip_size))
+        p = mp.Process(target=queue_render_graph, args=(q, i, status, total, G, spikes, pip_size, verbose))
         processes.append(p)
         p.start()
 
@@ -216,6 +218,7 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
             try:
                 id, graph_array = q.get(timeout=0.1)  # Short timeout to prevent blocking
                 graph_frames[id] = graph_array
+                rendered_frames[id] = 0
                 # Find and join the corresponding process
                 for proc in processes:
                     if not proc.is_alive():
@@ -230,6 +233,7 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
         try:
             id, graph_array = q.get(timeout=0.1)
             graph_frames[id] = graph_array
+            rendered_frames[id] = 0
             # Clean up completed processes
             for proc in processes[:]:
                 if not proc.is_alive():
@@ -247,14 +251,40 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
                     proc.terminate()  # Force terminate if process is hanging
                     processes.remove(proc)
     
-    sys.stdout.write(f'\033[{2}B')
-    sys.stdout.flush()
-    print()
+    if verbose:
+        sys.stdout.write(f'\033[{2}B')
+        sys.stdout.flush()
+        print()
+        print('Rendering complete')
+    
+    # Check for unrendered frames & fix them
+    if verbose: 
+        print("Checking for failed frames...")
+    if np.sum(rendered_frames) != 0:
+        # List of unrendered frame ids
+        to_render = np.nonzero(rendered_frames) 
+        # Turn all_spikes into ndarray for easier indexing
+        all_spikes = np.ndarray(all_spikes).squeeze() 
+        # Spikes of unrendered frames
+        spikes_to_render = all_spikes[to_render] 
+        # Recursively render the frames
+        if verbose:
+            print('Regenerating frames...')
+        new_frames = multi_render_graphs(model, spikes_to_render, pip_size, verbose=verbose)
+
+        # Put the new frames in their proper place
+        if verbose:
+            print('Fixing frames...')
+        for id in to_render:
+            graph_frames[id] = new_frames[id]
+        
+        if verbose:
+            print('Frames fixed!')
     
     return graph_frames
 
 # Define a queue function
-def queue_render_graph(q, id, status, total, G, spikes, pip_size):
+def queue_render_graph(q, id, status, total, G, spikes, pip_size, verbose):
     disp_graph(G, spikes)
 
     # Save frame to array
@@ -267,11 +297,11 @@ def queue_render_graph(q, id, status, total, G, spikes, pip_size):
     graph_array = np.array(graph_img)
 
     q.put((id, graph_array))
-    with status.get_lock():
-        status.value += 1
-        line_2(f'Rendering graphs: {status.value / total * 100:.2f}% completed')
+    if verbose:
+        with status.get_lock():
+            status.value += 1
+            line_2(f'Rendering graphs: {status.value / total * 100:.2f}% completed')
     return
-
 
 # Combine the two to make a final video
 def combine(game_frames, graph_frames, verbose=False):
@@ -304,46 +334,110 @@ def multi_combine(game_frames, graph_frames, verbose=False):
 
     num_frames = len(game_frames)
     frames = [[] for _ in range(num_frames)]
+    rendered_frames = np.array([1 for _ in range(num_frames)])
     processes = []
     q = mp.Queue()
     status = mp.Value('i', 0)
+    max_concurrent = 100  # Maximum number of concurrent processes
 
+    if verbose:
+        print('Combining frames...')
     # Start the processes
     for i in range(num_frames):
-        processes.append(mp.Process(target=queue_combine_frame, args=(q, i, status, num_frames, game_frames[i], graph_frames[i])))
-        processes[i].start()
+        if verbose:
+            line_1(f'Spinning up: {i / num_frames * 100:.2f}% completed')
 
-    # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
-        if q.qsize() > 5:
-            id, frame = q.get()
+        # Start new process
+        p = mp.Process(target=queue_combine_frame, args=(q, i, status, num_frames, game_frames[i], graph_frames[i], verbose))
+        processes.append(p)
+        p.start()
+
+        # Check queue and manage processes
+        while len(processes) >= max_concurrent:
+            try:
+                id, frame = q.get(timeout=0.1)  # Short timeout to prevent blocking
+                frames[id] = frame
+                rendered_frames[id] = 0
+                # Find and join the corresponding process
+                for proc in processes:
+                    if not proc.is_alive():
+                        proc.join(timeout=0.1)
+                        processes.remove(proc)
+                        break
+            except:
+                continue
+
+    # Get remaining items from queue
+    while len(processes) > 0:
+        try:
+            id, frame = q.get(timeout=0.1)
             frames[id] = frame
-            processes[i].join()
-            time.sleep(0.1)
-
-    # Get all the remaining items from the queue
-    for i in range(q.qsize()):
-        id, frame = q.get()
-        frames[id] = frame
+            rendered_frames[id] = 0
+            # Clean up completed processes
+            for proc in processes[:]:
+                if not proc.is_alive():
+                    proc.join(timeout=0.1)
+                    processes.remove(proc)
+        except:
+            # Check for any hanging processes
+            for proc in processes[:]:
+                if not proc.is_alive():
+                    proc.join(timeout=0.1)
+                    processes.remove(proc)
+                elif proc.is_alive() and not q.empty():
+                    continue
+                else:
+                    proc.terminate()  # Force terminate if process is hanging
+                    processes.remove(proc)
         
-    for p in processes:
-        p.join()
+    if verbose:
+        sys.stdout.write(f'\033[{2}B')
+        sys.stdout.flush()
+        print()
+        print('Combining complete')
+    
+    # Check for unrendered frames & fix them
+    if verbose: 
+        print("Checking for failed frames...")
+    if np.sum(rendered_frames) != 0:
+        # List of unrendered frame ids
+        to_render = np.nonzero(rendered_frames) 
+        # Turn graph & game frames into ndarrays for easier indexing
+        game_frames = np.ndarray(game_frames).squeeze() 
+        graph_frames = np.ndarray(graph_frames).squeeze() 
+        # Spikes of unrendered frames
+        game_frames_to_render = game_frames[to_render] 
+        graph_frames_to_render = graph_frames[to_render]
+        # Recursively render the frames
+        if verbose:
+            print('Regenerating frames...')
+        new_frames = multi_combine(game_frames_to_render, graph_frames_to_render, verbose=verbose)
 
-    print()
+        # Put the new frames in their proper place
+        if verbose:
+            print('Fixing frames...')
+        for id in to_render:
+            frames[id] = new_frames[id]
+        
+        if verbose:
+            print('Frames fixed!')
     
     return frames
 
 # Define a queue function
-def queue_combine_frame(q, id, status, total, game_array, pip_array):
+def queue_combine_frame(q, id, status, total, game_array, pip_array, verbose):
     # Combine graph & game frame
     # --- Composite picture-in-picture ---
     combined_frame = game_array.copy()  # Ensure writable
     combined_frame[0:pip_array.shape[0], 0:pip_array.shape[1], :] = pip_array
 
     q.put((id, combined_frame))
-    with status.get_lock():
-        status.value += 1
-        print(f'Combining frames: {status.value / total * 100:.2f}% completed', end='\r')
+    if verbose:
+        with status.get_lock():
+            status.value += 1
+            print(f'Combining frames: {status.value / total * 100:.2f}% completed', end='\r')
     return
+
 # Write frames to a file
 def write_frames(frames, filename, fps, verbose=False):
     with imageio.get_writer(filename, fps=fps, codec='libx264', format='ffmpeg') as writer:
