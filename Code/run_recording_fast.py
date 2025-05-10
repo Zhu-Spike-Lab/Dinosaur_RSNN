@@ -71,8 +71,8 @@ def disp_graph(graph, spikes=None):
         alpha=0.8       # Slightly transparent for better visual
     )
     
-    # Remove unnecessary padding and margins
-    plt.tight_layout(pad=0)
+    # Update
+    plt.draw()
     
     return G
 
@@ -142,7 +142,7 @@ def run_game(model, game_class, game_args, verbose=False):
                 pg_array = pygame.surfarray.array3d(screen).swapaxes(0, 1)  # Shape: (H, W, 3)
                 game_frames.append(pg_array)
 
-                time.sleep(0.001)
+                # time.sleep(0.001)
             
             print(f'Score: {game.score}')
 
