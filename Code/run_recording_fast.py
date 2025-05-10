@@ -113,7 +113,7 @@ def run_game(model, game_class, game_args, verbose=False):
                 time.sleep(0.001)
 
                 print(f'Running game. Score: {game.score}', end='\r')
-                # if len(all_spikes) >= 5:
+                # if len(all_spikes) >= 30:
                 #     print('debug mode active')
                 #     break
             
@@ -195,28 +195,26 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     graph_frames = [[] for _ in range(len(all_spikes))]
     processes = []
     q = mp.Queue()
+    status = mp.Value('i', 0)
 
     # Start the processes
     for i, spikes in enumerate(all_spikes):
-        processes.append(mp.Process(target=queue_render_graph, args=(q, G, spikes, pip_size)))
+        processes.append(mp.Process(target=queue_render_graph, args=(q, i, status, len(all_spikes), G, spikes, pip_size)))
         processes[i].start()
 
     for i in range(len(all_spikes)):
         id, graph_array = q.get()
         graph_frames[id] = graph_array
-        if verbose:
-            print(f'Rendering graphs: {(i+1) / len(all_spikes) * 100:.2f}% completed', end='\r')
-    
-    if verbose:
-        print()
-    
+        
     for p in processes:
         p.join()
+    
+    print()
     
     return graph_frames
 
 # Define a queue function
-def queue_render_graph(q, G, spikes, pip_size):
+def queue_render_graph(q, id, status, total, G, spikes, pip_size):
     disp_graph(G, spikes)
 
     # Save frame to array
@@ -228,7 +226,10 @@ def queue_render_graph(q, G, spikes, pip_size):
     graph_img = graph_img.resize(pip_size)
     graph_array = np.array(graph_img)
 
-    q.put(graph_array)
+    q.put((id, graph_array))
+    with status.get_lock():
+        status.value += 1
+        print(f'Rendering graphs: {status.value / total * 100:.2f}% completed', end='\r')
     return
 
 
@@ -265,34 +266,35 @@ def multi_combine(game_frames, graph_frames, verbose=False):
     frames = [[] for _ in range(num_frames)]
     processes = []
     q = mp.Queue()
+    status = mp.Value('i', 0)
 
     # Start the processes
     for i in range(num_frames):
-        processes.append(mp.Process(target=queue_combine_frame, args=(q, game_frames[i], graph_frames[i])))
+        processes.append(mp.Process(target=queue_combine_frame, args=(q, i, status, num_frames, game_frames[i], graph_frames[i])))
         processes[i].start()
 
     for i in range(num_frames):
         id, frame = q.get()
         frames[id] = frame
-        if verbose:
-            print(f'Combining frames: {(i+1) / num_frames * 100:.2f}% completed', end='\r')
-    
-    if verbose:
-        print()
     
     for p in processes:
         p.join()
+
+    print()
     
     return frames
 
 # Define a queue function
-def queue_combine_frame(q, game_array, pip_array):
+def queue_combine_frame(q, id, status, total, game_array, pip_array):
     # Combine graph & game frame
     # --- Composite picture-in-picture ---
     combined_frame = game_array.copy()  # Ensure writable
     combined_frame[0:pip_array.shape[0], 0:pip_array.shape[1], :] = pip_array
 
-    q.put(combined_frame)
+    q.put((id, combined_frame))
+    with status.get_lock():
+        status.value += 1
+        print(f'Combining frames: {status.value / total * 100:.2f}% completed', end='\r')
     return
 # Write frames to a file
 def write_frames(frames, filename, fps, verbose=False):
