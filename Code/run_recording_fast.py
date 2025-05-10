@@ -206,6 +206,7 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     processes = []
     q = mp.Queue()
     status = mp.Value('i', 0)
+    total = len(all_spikes)
 
     # Start the processes
     print('Rendering graphs...')
@@ -215,14 +216,18 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
         processes[i].start()
 
         # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
-        if q.qsize() > 0:
-            id, graph_array = q.get()
-            graph_frames[id] = graph_array
-            processes[i].join()
-            time.sleep(0.1)
+        if q.qsize() > 5:
+            try:
+                id, graph_array = q.get(block=False)
+                graph_frames[id] = graph_array
+                processes[i].join()
+                total -= 1
+                time.sleep(0.01)
+            except:
+                time.sleep(0.01)
 
     # Get all the remaining items from the queue
-    for i in range(q.qsize()):
+    for i in range(total): # Not a reliable way to make sure everything's out of the queue...
         id, graph_array = q.get()
         graph_frames[id] = graph_array
         
