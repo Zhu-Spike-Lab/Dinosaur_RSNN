@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import seaborn as sns
-import purported_no_bias_exploration as pnbe
-import little_model_exploration as vm
+from run_recording_fast import render_run
+# from run_displaying import display_model
+
 
 
 def prune_weights(model, pruning_rate=0.5):
@@ -102,8 +103,8 @@ if __name__ == '__main__':
     pygame.init()
     WIDTH, HEIGHT = 800, 400
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pnbe.visualize_model(model, tm.DinosaurGame, (100,))
-    # vm.visualize_model(model, tm.DinosaurGame, (100,))
+    # display_model(model, tm.DinosaurGame, (100,), interactive=True)
+    render_run(model, tm.DinosaurGame, (100,))
 
     G = disp_graph(model)
 
