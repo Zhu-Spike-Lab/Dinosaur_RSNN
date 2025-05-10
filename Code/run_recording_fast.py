@@ -43,43 +43,36 @@ def generate_graph(model):
 def disp_graph(graph, spikes=None):
     G = graph
 
-    nx.set_node_attributes(G, 'black', 'color')
-    
-    G.nodes[0]['color'] = 'green'
-
-    
-    # for u, v, w in G.edges.data('weight'):
-    #         if w > 0:
-    #             G[u][v]['color'] = 'blue'
-    #         else:
-    #             G[u][v]['color'] = 'red'
+    # Pre-allocate node colors array for better performance
+    node_colors = ['black'] * len(G.nodes)
+    node_colors[0] = 'green'  # Set input node color
 
     if spikes is not None:
-        edgelist = []
         spikes = spikes.flatten()
-        
-        
+        # Update node colors for spiking neurons
         for i, spike in enumerate(spikes):
             if spike > 0:
-                G.nodes[i]['color'] = 'orange'
+                node_colors[i] = 'orange'
     
-    else:
-        edgelist = G.edges 
-        for u, v, w in G.edges.data('weight'):
-            if w > 0:
-                G[u][v]['color'] = 'blue'
-            else:
-                G[u][v]['color'] = 'red'
+    edge_colors = ['blue' if w > 0 else 'red' for _, _, w in G.edges.data('weight')]
+
+    # Create figure with specific size to avoid resizing
+    plt.figure(figsize=(8, 8), dpi=100)
     
-
-    edgelist = G.edges 
-
-    node_colors = [c[1] for c in G.nodes.data('color')]
-    edge_colors = [c[2] for c in G.edges.data('color')]
-
-    nx.draw_circular(G, node_color=node_colors, edgelist=edgelist, edge_color=edge_colors, with_labels=False, connectionstyle="arc3,rad=0.1")
-    plt.draw()
-
+    # Draw graph with optimized parameters
+    nx.draw_circular(
+        G,
+        node_color=node_colors,
+        edge_color=edge_colors,
+        with_labels=False,
+        connectionstyle="arc3,rad=0.1",
+        node_size=100,  # Reduced node size for better performance
+        width=1.0,      # Reduced edge width
+        alpha=0.8       # Slightly transparent for better visual
+    )
+    
+    # Remove unnecessary padding and margins
+    plt.tight_layout(pad=0)
     
     return G
 
@@ -120,7 +113,7 @@ def run_game(model, game_class, game_args, verbose=False):
                 pg_array = pygame.surfarray.array3d(screen).swapaxes(0, 1)  # Shape: (H, W, 3)
                 game_frames.append(pg_array)
 
-                time.sleep(0.001)
+                # time.sleep(0.001)
 
                 print(f'Running game. Score: {game.score}', end='\r')
                 # if len(all_spikes) >= 30:
@@ -160,7 +153,7 @@ def run_game(model, game_class, game_args, verbose=False):
 # Render all the graphs, each in their own thread
 def render_graphs(model, all_spikes, pip_size, verbose=False):
     G = generate_graph(model)
-
+    graph_frames = []  # Initialize the list before the loop
 
     if verbose:
         for i, spikes in enumerate(all_spikes):
@@ -207,32 +200,52 @@ def multi_render_graphs(model, all_spikes, pip_size, verbose=False):
     q = mp.Queue()
     status = mp.Value('i', 0)
     total = len(all_spikes)
+    max_concurrent = 100  # Maximum number of concurrent processes
 
-    # Start the processes
     print('Rendering graphs...')
     for i, spikes in enumerate(all_spikes):
-        line_1(f'Spinning up: {i / len(all_spikes) * 100:.2f}% completed')
-        processes.append(mp.Process(target=queue_render_graph, args=(q, i, status, len(all_spikes), G, spikes, pip_size)))
-        processes[i].start()
-
-        # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
-        if q.qsize() > 5:
-            try:
-                id, graph_array = q.get(block=False)
-                graph_frames[id] = graph_array
-                processes[i].join()
-                total -= 1
-                time.sleep(0.01)
-            except:
-                time.sleep(0.01)
-
-    # Get all the remaining items from the queue
-    for i in range(total): # Not a reliable way to make sure everything's out of the queue...
-        id, graph_array = q.get()
-        graph_frames[id] = graph_array
+        line_1(f'Spinning up: {i / total * 100:.2f}% completed')
         
-    for p in processes:
-        p.join()
+        # Start new process
+        p = mp.Process(target=queue_render_graph, args=(q, i, status, total, G, spikes, pip_size))
+        processes.append(p)
+        p.start()
+
+        # Check queue and manage processes
+        while len(processes) >= max_concurrent:
+            try:
+                id, graph_array = q.get(timeout=0.1)  # Short timeout to prevent blocking
+                graph_frames[id] = graph_array
+                # Find and join the corresponding process
+                for proc in processes:
+                    if not proc.is_alive():
+                        proc.join(timeout=0.1)
+                        processes.remove(proc)
+                        break
+            except:
+                continue
+
+    # Get remaining items from queue
+    while len(processes) > 0:
+        try:
+            id, graph_array = q.get(timeout=0.1)
+            graph_frames[id] = graph_array
+            # Clean up completed processes
+            for proc in processes[:]:
+                if not proc.is_alive():
+                    proc.join(timeout=0.1)
+                    processes.remove(proc)
+        except:
+            # Check for any hanging processes
+            for proc in processes[:]:
+                if not proc.is_alive():
+                    proc.join(timeout=0.1)
+                    processes.remove(proc)
+                elif proc.is_alive() and not q.empty():
+                    continue
+                else:
+                    proc.terminate()  # Force terminate if process is hanging
+                    processes.remove(proc)
     
     sys.stdout.write(f'\033[{2}B')
     sys.stdout.flush()
@@ -301,7 +314,7 @@ def multi_combine(game_frames, graph_frames, verbose=False):
         processes[i].start()
 
     # Make it go slower to prevent crashes and grab things from queue to prevent too much pileup
-        if q.qsize() > 0:
+        if q.qsize() > 5:
             id, frame = q.get()
             frames[id] = frame
             processes[i].join()

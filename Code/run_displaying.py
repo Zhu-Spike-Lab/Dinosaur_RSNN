@@ -21,34 +21,35 @@ def generate_graph(model):
 def disp_graph(graph, spikes=None):
     G = graph
 
-    nx.set_node_attributes(G, 'black', 'color')
-    
-    G.nodes[0]['color'] = 'green'
+    # Pre-allocate node colors array for better performance
+    node_colors = ['black'] * len(G.nodes)
+    node_colors[0] = 'green'  # Set input node color
+    edge_colors = []
+    edgelist = []
 
     if spikes is not None:
-        edgelist = []
         spikes = spikes.flatten()
-        
         
         for i, spike in enumerate(spikes):
             if spike > 0:
-                G.nodes[i]['color'] = 'orange'
+                node_colors[i] = 'orange'
     
     else:
         edgelist = G.edges 
-        for u, v, w in G.edges.data('weight'):
-            if w > 0:
-                G[u][v]['color'] = 'blue'
-            else:
-                G[u][v]['color'] = 'red'
+        edge_colors = ['blue' if w > 0 else 'red' for _, _, w in G.edges.data('weight')]
     
 
-    edgelist = G.edges 
-
-    node_colors = [c[1] for c in G.nodes.data('color')]
-    edge_colors = [c[2] for c in G.edges.data('color')]
-
-    nx.draw_circular(G, node_color=node_colors, edgelist=edgelist, edge_color=edge_colors, with_labels=False, connectionstyle="arc3,rad=0.1")
+    nx.draw_circular(
+        G, 
+        node_color=node_colors, 
+        edgelist=edgelist, 
+        edge_color=edge_colors, 
+        with_labels=False, 
+        connectionstyle="arc3,rad=0.1", 
+        node_size=100, 
+        width=1.0, 
+        alpha=0.8
+    )
     plt.show(block=False)
 
     
