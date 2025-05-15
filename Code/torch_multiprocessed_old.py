@@ -1042,6 +1042,8 @@ def print_model_performance(model, game_class, game_args, verbose=True):
             # Print the score
             if verbose:
                 print(f'Score: {game.score}') 
+        
+        return game.score
 
         # plot_spike_tensor(spikes, title='Spike Trains')
 
