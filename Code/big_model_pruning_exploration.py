@@ -1,11 +1,25 @@
 import torch_multiprocessed_old as tm
 import torch
 from torch.nn.utils import prune
-from copy import deepcopy
-from contextlib import redirect_stdout
 import multiprocessing as mp
+import sys
+import numpy as np
+import time
 
+# Printing functions
+def line_1(word):
+    sys.stdout.write(f'\033[{2}A')
+    sys.stdout.write('\033[K')
+    sys.stdout.write(word + '\r')
+    sys.stdout.write(f'\033[{2}B')
+    sys.stdout.flush()
 
+def line_2(word):
+    sys.stdout.write(f'\033[{1}A')
+    sys.stdout.write('\033[K')
+    sys.stdout.write(word + '\r')
+    sys.stdout.write(f'\033[{1}B')
+    sys.stdout.flush()
 
 def prune_weights(model, pruning_rate=0.5):
     pruner = prune.L1Unstructured(pruning_rate)
@@ -22,38 +36,96 @@ def calc_sparsity(model):
     sparsity = zeros.item() / total
     return sparsity
 
-def test(q, id, model):
+def test(q, id, status, total, model):
     score = tm.print_model_performance(model, tm.DinosaurGame, (100,), verbose=False)
     print(id, score)
     q.put((id, score))
+    with status.get_lock():
+        status.value += 1
+        line_2(f'Combinatoricking: {status.value / total * 100:.2f}% completed')
     return
 
 
 def multi_test(model, combos):
-    works = [False for _ in range(len(combos))]
+    total = len(combos)
+    works = [False for _ in range(total)] # change to torch.zeros(model.rlif1.recurrent.weight.data.shape)
+    tested = np.array([1 for _ in range(total)])
     processes = []
     q = mp.Queue()
+    status = mp.Value('i', 0)
+    max_concurrent = 200
+
+    print('Combinating...\n\n')
     
     # Create a copy of the model's state dict for each process
     state_dict = model.state_dict()
     
     for i, combo in enumerate(combos):
+        line_1(f'Spinning up: {(i+1) / total * 100:.2f}% started')
         # Create a new model instance for each process
         test_model = tm.RSNN2(num_inputs=1, num_hidden=80, num_outputs=1)
         test_model.load_state_dict(state_dict)
         test_model.rlif1.recurrent.weight.data[combo] = 0
         
-        p = mp.Process(target=test, args=(q, i, test_model))
+        p = mp.Process(target=test, args=(q, i, test_model)) # Change i to combo
         processes.append(p)
         p.start()
 
-    for i in range(len(combos)):
-        id, score = q.get()
-        works[id] = score >= 50
+        # Check queue and manage processes
+        while len(processes) >= max_concurrent:
+            try:
+                id, score = q.get(timeout=0.1)  # Short timeout to prevent blocking
+                works[id] = score >= 50
+                tested[id] = 0
+                # Find and join the corresponding process
+                for proc in processes:
+                    if not proc.is_alive():
+                        proc.join(timeout=0.1)
+                        processes.remove(proc)
+                        break
+            except:
+                continue
 
-    for p in processes:
-        p.join()
+    # Get remaining items from queue
+    now = time.thread_time()
+    while len(processes) > 0:
+        try:
+            id, score = q.get(timeout=1)
+            works[id] = score >= 50
+            tested[id] = 0
+            # Clean up completed processes
+            for proc in processes[:]:
+                if not proc.is_alive():
+                    proc.join(timeout=1)
+                    processes.remove(proc)
+        except:
+            # Check for any hanging processes
+            
+            for proc in processes:
+                if not proc.is_alive():
+                    proc.join(timeout=0.1)
+                    processes.remove(proc)
+                elif proc.is_alive() and not q.empty():
+                    continue
+                elif time.thread_time() - now >= 10: # After 10 seconds, start terminating processes
+                    proc.terminate()  # Force terminate if process is hanging
+                    processes.remove(proc)
+    
+    print('Rendering complete')
+    print("Checking for failed combos...")
+    
+    # Check for unrendered frames & fix them
+    if np.sum(tested) != 0:
+        print("Failed combos found")
+        # List of unrendered frame ids
+        to_render = np.nonzero(tested) 
+        # Turn all_spikes into ndarray for easier indexing
+        print(to_render)
 
+
+    else:
+        print("No failed combos found")
+    
     return works
 
 
@@ -75,6 +147,10 @@ if __name__ == '__main__':
     print('Post prune sparsity: ', end='')
     print(calc_sparsity(model))
     
-    print(multi_test(model, [(7,61)]))
+
+    connections = torch.nonzero(little_prune)
+    works = multi_test(model, connections)
+
+    print(torch.nonzero(works))
 
     
