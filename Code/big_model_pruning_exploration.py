@@ -47,6 +47,12 @@ def test(q, id, status, total, model, verbose):
             line_2(f'Combinatoricking: {status.value / total * 100:.2f}% completed')
     return
 
+def little_test(model, combo):
+    test_model = deepcopy(model)
+    test_model.rlif1.recurrent.weight.data[*combo] = 0
+    score = tm.print_model_performance(model, tm.DinosaurGame, (100,), verbose=False)
+
+    return (score >= 50)
 
 def multi_test(model, combos, verbose=True):
     total = len(combos)
@@ -78,7 +84,7 @@ def multi_test(model, combos, verbose=True):
         while len(processes) >= max_concurrent:
             try:
                 id, score = q.get(timeout=0.01)  # Short timeout to prevent blocking
-                if score >= 50: works[id] = 1;
+                if score >= 50: works[id] = 1
                 tested[id] = 0
                 # Find and join the corresponding process
                 for proc in processes:
@@ -134,6 +140,45 @@ def multi_test(model, combos, verbose=True):
     
     return works
 
+def find_minimal(model):
+    connections = torch.nonzero(model)
+    total = len(connections)
+
+    # Do it in batches of 400
+    for i in range(0, total // 400):
+        print(i)
+        combos = connections[400*i:400*(i+1)]
+        works = multi_test(model, combos)
+
+        # Connections that can be removed exist @ works == 1
+        removable_connections = combos(torch.nonzero(works))
+
+        if len(removable_connections) == 0:
+            print(f'On Run {i}, we found no removable connections and have now quit')
+            return model
+
+        model.rlif1.recurrent.weight.data[removable_connections] = 0
+    
+    i = total // 400
+    combos = connections[400*i:]
+    works = multi_test(model, combos)
+
+    # Connections that can be removed exist @ works == 1
+    removable_connections = combos(torch.nonzero(works))
+
+    if len(removable_connections) == 0:
+        print(f'On Run {i}, we found no removable connections and have now quit')
+        return model
+
+    model.rlif1.recurrent.weight.data[removable_connections] = 0
+
+    return model
+    
+
+
+
+
+
 
 if __name__ == '__main__':
 
@@ -157,8 +202,13 @@ if __name__ == '__main__':
     
 
     connections = torch.nonzero(little_prune)
-    works = multi_test(model, connections)
+    # works = multi_test(model, connections)
 
-    print(works)
+    model = find_minimal(model)
+    print(f'Final sparsity:{calc_sparsity(model)}')
+
+
+
+    print(little_test(model, [0,0]))
 
     
