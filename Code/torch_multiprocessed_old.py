@@ -1025,7 +1025,7 @@ def plot_connectivity_changes_line(initial_models, final_models):
     plt.savefig(f'Data/Connectivity_Changes {time.asctime()}.png')
 
 # rasters for best model of evolution and sine wave predictions
-def print_model_performance(model, game_class, game_args):
+def print_model_performance(model, game_class, game_args, verbose=True):
 
         game = game_class(*game_args)
 
@@ -1040,7 +1040,8 @@ def print_model_performance(model, game_class, game_args):
                 game.step(choice)
             
             # Print the score
-            print(f'Score: {game.score}') 
+            if verbose:
+                print(f'Score: {game.score}') 
 
         # plot_spike_tensor(spikes, title='Spike Trains')
 
