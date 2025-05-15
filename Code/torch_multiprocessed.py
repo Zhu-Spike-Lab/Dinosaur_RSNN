@@ -1,7 +1,3 @@
-# Sine Wave Evolution Engine
-
-# Changes: added np.flip to the select function to sort greatest to least fitness
-
 import os
 import sys
 import torch
@@ -209,7 +205,8 @@ class RLIF1(LIF):
 
     def _init_mem(self):
         spk = torch.zeros(0)
-        mem = torch.ones(0) * -70 # Default membrane potential of -70 mV
+        # mem = torch.ones(0) * -70 # Default membrane potential of -70 mV
+        mem = torch.zeros(0) # Default membrane potential of 0, for ease
         refractory_counter = torch.zeros(0)
 
         self.register_buffer('spk', spk, False)
@@ -451,14 +448,14 @@ class RSNN2(nn.Module):
 
         # Recurrent layer weight matrix
         hidden_mx = hid_mx(num_excitatory, num_inhibitory, num_iPV, num_iSst, num_iHtr, p_nn) 
-        self.rlif1 = RLIF1(reset_mechanism='zero', threshold = 1, beta=beta, linear_features=num_hidden, all_to_all=True)
+        self.rlif1 = RLIF1(reset_mechanism='zero', threshold = 1, beta=beta, linear_features=num_hidden, all_to_all=True) # TODO: Changed from 1
         self.rlif1.recurrent.weight.data = hidden_mx.T
 
-        #hidden to output layer
-        # For the purposes of our game, this is pretty much completely unnecessary and can be replaced w a single output neuron
-        hid_out_mx = conn_mx(num_hidden,num_output,pe_e)
-        self.l2 = nn.Linear(num_hidden, num_output, bias=False)
-        self.l2.weight.data = hid_out_mx.T 
+        # # hidden to output layer
+        # # For the purposes of our game, this is pretty much completely unnecessary and can be replaced w a single output neuron
+        # hid_out_mx = conn_mx(num_hidden,num_output,pe_e)
+        # self.l2 = nn.Linear(num_hidden, num_output, bias=False)
+        # self.l2.weight.data = hid_out_mx.T 
 
         self.spk1,self.mem1 = self.rlif1.init_rleaky()
         self.spk1_rec = []
@@ -629,7 +626,7 @@ class Evolution(object):
         num_iSst = model.num_iSst
         num_iHtr = model.num_iHtr
         num_inputs = model.l1.in_features
-        num_output = model.l2.out_features
+        # num_output = model.l2.out_features
         p_nn = model.p_nn
         num_inhibitory = num_hidden - num_excitatory
         pe_e = 0.16
@@ -642,9 +639,9 @@ class Evolution(object):
         hidden_mx = hid_mx(num_excitatory, num_inhibitory, num_iPV, num_iSst, num_iHtr, p_nn)
         model.rlif1.recurrent.weight.data = hidden_mx.T
 
-        # Initialize the hidden to output layer weights
-        hid_out_mx = conn_mx(num_hidden, num_output, pe_e)
-        model.l2.weight.data = hid_out_mx.T
+        # # Initialize the hidden to output layer weights
+        # hid_out_mx = conn_mx(num_hidden, num_output, pe_e)
+        # model.l2.weight.data = hid_out_mx.T
 
         # Store the initial sparsity mask
         self.weights = model.rlif1.recurrent.weight.data
@@ -755,7 +752,7 @@ class Evolution(object):
         
         model_weights = model.rlif1.recurrent.weight.data
         zeros = torch.sum(model_weights == 0) 
-        target = model_weights.numel() * 0.5 # Where 0.8 is the desired sparsity threshold #TODO
+        target = model_weights.numel() * 0.8 # Where 0.8 is the desired sparsity threshold #TODO
         if zeros < target: 
             linearized = model_weights.reshape(-1)
             pruner = prune.L1Unstructured(int(target - zeros))

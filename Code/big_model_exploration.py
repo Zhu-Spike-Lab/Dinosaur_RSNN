@@ -84,8 +84,8 @@ if __name__ == '__main__':
     model.load_state_dict(state_dict)
 
     print(calc_sparsity(model))
-    # big_prune = prune_weights(model, pruning_rate=0.1615) # fails
-    little_prune = prune_weights(model, pruning_rate=0.15) # doesn't fail
+    big_prune = prune_weights(model, pruning_rate=0.1615) # fails
+    # little_prune = prune_weights(model, pruning_rate=0.15) # doesn't fail
     # print(torch.equal(big_prune, little_prune))
     # print(torch.sum(big_prune - little_prune != 0))
     # diffs = torch.where(big_prune - little_prune != 0)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # print(f'big: {big_prune[diffs]}')
     # print(f'little: {little_prune[7, 61].detach().numpy()}')
     # little_prune[7, 61] = 0
-    model.rlif1.recurrent.weight.data = little_prune
+    model.rlif1.recurrent.weight.data = big_prune
     # df = pd.DataFrame(little_prune.detach().numpy())
     # print(df)
     # df.to_csv('little.csv')
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     WIDTH, HEIGHT = 800, 400
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     # display_model(model, tm.DinosaurGame, (100,), interactive=True)
-    render_run(model, tm.DinosaurGame, (100,))
+    render_run(model, tm.DinosaurGame, (100,), max_concurrent=200)
 
     G = disp_graph(model)
 

@@ -46,7 +46,6 @@ def disp_graph(graph, spikes=None):
         edge_color=edge_colors, 
         with_labels=False, 
         connectionstyle="arc3,rad=0.1", 
-        node_size=100, 
         width=1.0, 
         alpha=0.8
     )
