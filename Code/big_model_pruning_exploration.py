@@ -23,9 +23,8 @@ def calc_sparsity(model):
     return sparsity
 
 def test(q, id, model):
-    with redirect_stdout(open('/dev/null', 'w')):
-        score = tm.print_model_performance(model, tm.DinosaurGame, (100,))
-    
+    score = tm.print_model_performance(model, tm.DinosaurGame, (100,), verbose=False)
+    print(id, score)
     q.put((id, score))
     return
 
